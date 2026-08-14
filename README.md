@@ -162,8 +162,6 @@ make unit-cover # run tests with coverage
 make check      # run both
 ```
 
-See [docs/architecture.md](docs/architecture.md) for design details and [docs/testing.md](docs/testing.md) for the testing strategy.
-
 ## License
 
 MIT
