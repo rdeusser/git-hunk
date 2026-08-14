@@ -2,7 +2,9 @@ package output_test
 
 import (
 	"bytes"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/rdeusser/git-hunk/diff"
 	"github.com/rdeusser/git-hunk/output"
@@ -200,4 +202,63 @@ func TestFormatText_BinaryFile(_ *testing.T) {
 	// Use reflection or a different approach - for now skip binary test.
 	_ = file
 	_ = parsed
+}
+
+func TestFormatChangeGroups(t *testing.T) {
+	long := strings.Repeat("x", 80)
+	wide := strings.Repeat("é", 80)
+
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{
+			name: "rows align and carry a selector, a stat, and a preview",
+			input: `diff --git a/main.go b/main.go
+--- a/main.go
++++ b/main.go
+@@ -1,3 +1,4 @@
+ package main
+-var old = 1
++var new = 2
++var more = 3
+ func main() {}
+`,
+			want: []string{"main.go:2-3  +2 -1    var new = 2"},
+		},
+		{
+			name: "an over-long preview is cut with an ellipsis",
+			input: "diff --git a/main.go b/main.go\n" +
+				"--- a/main.go\n+++ b/main.go\n" +
+				"@@ -1,1 +1,2 @@\n package main\n+" + long + "\n",
+			want: []string{strings.Repeat("x", 57) + "..."},
+		},
+		{
+			// A byte-wise cut would land inside a two-byte rune and
+			// print a replacement glyph.
+			name: "a multi-byte preview is cut on a rune boundary",
+			input: "diff --git a/main.go b/main.go\n" +
+				"--- a/main.go\n+++ b/main.go\n" +
+				"@@ -1,1 +1,2 @@\n package main\n+" + wide + "\n",
+			want: []string{strings.Repeat("é", 57) + "..."},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := diff.Parse(tt.input)
+			require.NoError(t, err)
+
+			var buf bytes.Buffer
+
+			require.NoError(t, output.FormatChangeGroups(&buf, parsed))
+
+			for _, want := range tt.want {
+				require.Contains(t, buf.String(), want)
+			}
+
+			require.True(t, utf8.ValidString(buf.String()))
+		})
+	}
 }

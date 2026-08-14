@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/rdeusser/git-hunk/diff"
 )
@@ -17,6 +18,13 @@ const (
 	colorBlue   = "\033[34m"
 	colorCyan   = "\033[36m"
 	colorDim    = "\033[2m"
+)
+
+// previewWidth is where a group's preview line is cut, in runes. The row is
+// meant to identify a change, not to reproduce it.
+const (
+	previewWidth = 60
+	ellipsis     = "..."
 )
 
 // TextOptions configures text output formatting.
@@ -135,6 +143,39 @@ func FormatStageableLines(w io.Writer, parsed *diff.ParsedDiff) error {
 	return nil
 }
 
+// FormatChangeGroups writes one row per independently stageable change
+// group. The first column is the selection that stages that row, so a row
+// can be pasted straight into a stage command.
+func FormatChangeGroups(w io.Writer, parsed *diff.ParsedDiff) error {
+	var (
+		groups    []diff.ChangeGroup
+		selectors []string
+		stats     []string
+		widest    int
+	)
+
+	for group := range parsed.ChangeGroups() {
+		selector := group.Selector()
+		if len(selector) > widest {
+			widest = len(selector)
+		}
+
+		groups = append(groups, group)
+		selectors = append(selectors, selector)
+		stats = append(stats, fmt.Sprintf(
+			"+%d -%d", group.Added, group.Deleted,
+		))
+	}
+
+	for i, group := range groups {
+		fmt.Fprintf(w, "%-*s  %-7s  %s\n",
+			widest, selectors[i], stats[i], previewOf(group.Preview),
+		)
+	}
+
+	return nil
+}
+
 // FormatStagingCommands writes suggested stage commands.
 func FormatStagingCommands(w io.Writer, parsed *diff.ParsedDiff) error {
 	for file := range parsed.Files() {
@@ -179,6 +220,35 @@ func FormatStagingCommands(w io.Writer, parsed *diff.ParsedDiff) error {
 	}
 
 	return nil
+}
+
+// previewOf trims a line down to something that fits one row. Leading
+// indentation carries no information here and only pushes the content out
+// of view, so it goes.
+//
+// The cut counts runes rather than bytes. Source lines carry non-ASCII text
+// often enough that a byte cut would land inside a character and print a
+// replacement glyph in a column meant to identify the change.
+func previewOf(content string) string {
+	trimmed := strings.TrimLeft(content, " \t")
+	if utf8.RuneCountInString(trimmed) <= previewWidth {
+		return trimmed
+	}
+
+	var (
+		kept  int
+		width = previewWidth - len(ellipsis)
+	)
+
+	for i := range trimmed {
+		if kept == width {
+			return trimmed[:i] + ellipsis
+		}
+
+		kept++
+	}
+
+	return trimmed
 }
 
 func formatFile(w io.Writer, file *diff.FileDiff, opts TextOptions) error {

@@ -25,6 +25,9 @@ Examples:
   # Show changes in JSON format (for agents)
   git-hunk diff --json
 
+  # List each change that can be staged on its own
+  git-hunk list
+
   # Stage specific lines from a file
   git-hunk stage main.go:10-20
 
@@ -46,6 +49,7 @@ type CLI struct {
 	Dir        string        `short:"C" placeholder:"PATH" help:"Run as if git was started in this directory."`
 	JSON       bool          `help:"Output in JSON format (for machine consumption)."`
 	Diff       DiffCmd       `cmd:"" help:"Show changes with line numbers."`
+	List       ListCmd       `cmd:"" help:"List the changes that can be staged on their own."`
 	Stage      StageCmd      `cmd:"" help:"Stage specific lines."`
 	Preview    PreviewCmd    `cmd:"" help:"Show staged changes."`
 	Commit     CommitCmd     `cmd:"" help:"Commit staged changes."`

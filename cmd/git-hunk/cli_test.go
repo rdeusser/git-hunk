@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rdeusser/git-hunk/output"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,6 +84,7 @@ func TestGrammar(t *testing.T) {
 
 	commands := map[string]bool{
 		"diff":        true,
+		"list":        true,
 		"stage":       true,
 		"preview":     true,
 		"commit":      true,
@@ -1132,4 +1135,221 @@ func TestStageReportsSelectionsThatMatchNothing(t *testing.T) {
 	require.Empty(t, gitCmd(t, dir, "diff", "--cached", "--name-only"),
 		"a failed stage must leave the index untouched",
 	)
+}
+
+// listGroups runs "list --json" and decodes the rows it printed.
+func listGroups(t *testing.T, dir string, args ...string) []output.GroupOutput {
+	t.Helper()
+
+	argv := append([]string{"--dir", dir, "--json", "list"}, args...)
+
+	text, err := runCLI(t, argv...)
+	require.NoError(t, err)
+
+	var listed output.GroupListOutput
+
+	require.NoError(t, json.Unmarshal([]byte(text), &listed))
+
+	return listed.Groups
+}
+
+// countStaged returns the added and deleted line counts in the index.
+func countStaged(t *testing.T, dir string) (added, deleted int) {
+	t.Helper()
+
+	for line := range strings.SplitSeq(gitCmd(t, dir, "diff", "--cached"), "\n") {
+		switch {
+		case strings.HasPrefix(line, "+++"), strings.HasPrefix(line, "---"):
+		case strings.HasPrefix(line, "+"):
+			added++
+		case strings.HasPrefix(line, "-"):
+			deleted++
+		}
+	}
+
+	return added, deleted
+}
+
+// TestListRoundTripsThroughStage is the property the whole command rests on:
+// every row list prints must stage exactly the change it describes. A row that
+// stages more than it shows would make the listing a suggestion rather than an
+// address.
+func TestListRoundTripsThroughStage(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "main.go", "package main\n\nfunc main() {\n\tone()\n\ttwo()\n}\n")
+	writeFile(t, dir, "util.go", "package main\n\nfunc util() {}\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	// A replacement, an insertion after untouched context, and a pure
+	// addition in a second file.
+	writeFile(t, dir, "main.go",
+		"package main\n\nfunc main() {\n\tONE()\n\ttwo()\n\tthree()\n}\n",
+	)
+	writeFile(t, dir, "util.go",
+		"package main\n\nfunc util() {}\n\nfunc extra() {}\n",
+	)
+
+	groups := listGroups(t, dir)
+	require.NotEmpty(t, groups)
+
+	for _, group := range groups {
+		t.Run(group.Selector, func(t *testing.T) {
+			gitCmd(t, dir, "reset")
+
+			_, err := runCLI(t, "--dir", dir, "stage", group.Selector)
+			require.NoError(t, err)
+
+			added, deleted := countStaged(t, dir)
+			require.Equal(t, group.Added, added,
+				"staging %s added lines the row did not list",
+				group.Selector,
+			)
+			require.Equal(t, group.Deleted, deleted,
+				"staging %s deleted lines the row did not list",
+				group.Selector,
+			)
+		})
+	}
+
+	gitCmd(t, dir, "reset")
+}
+
+// TestListAddressesDeletions covers the case a caller cannot address by
+// guesswork: a run of deleted lines, which exists in the old file only.
+func TestListAddressesDeletions(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "main.go", "keep1\ndrop1\ndrop2\ndrop3\nkeep2\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	writeFile(t, dir, "main.go", "keep1\nkeep2\n")
+
+	groups := listGroups(t, dir)
+	require.Len(t, groups, 1)
+	require.Equal(t, "main.go:2-4", groups[0].Selector)
+	require.Equal(t, 3, groups[0].Deleted)
+	require.Equal(t, 0, groups[0].Added)
+	require.Equal(t, "drop1", groups[0].Preview)
+
+	_, err := runCLI(t, "--dir", dir, "stage", groups[0].Selector)
+	require.NoError(t, err)
+
+	added, deleted := countStaged(t, dir)
+	require.Equal(t, 0, added)
+	require.Equal(t, 3, deleted)
+}
+
+// TestListStaged reads the index rather than the working tree, so a caller can
+// see what a commit would contain.
+func TestListStaged(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "main.go", "a\nb\nc\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	writeFile(t, dir, "main.go", "a\nb\nc\nd\ne\n")
+
+	_, err := runCLI(t, "--dir", dir, "stage", "main.go:4")
+	require.NoError(t, err)
+
+	staged := listGroups(t, dir, "--staged")
+	require.Len(t, staged, 1)
+	require.Equal(t, "main.go:4", staged[0].Selector)
+	require.Equal(t, "d", staged[0].Preview)
+
+	unstaged := listGroups(t, dir)
+	require.Len(t, unstaged, 1)
+	require.Equal(t, "e", unstaged[0].Preview)
+}
+
+// TestListEmpty keeps the no-change case machine-readable: an agent parsing
+// --json must get an empty group list, not an empty file.
+func TestListEmpty(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "main.go", "a\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	text, err := runCLI(t, "--dir", dir, "list")
+	require.NoError(t, err)
+	require.Empty(t, text)
+
+	require.Empty(t, listGroups(t, dir))
+}
+
+// TestListSelectorsCollideAcrossNumbering documents a defect that predates
+// this command. FILE:LINES has one integer namespace, but a diff has two: a
+// deletion is addressed by its old-file line and an addition by its new-file
+// line. Once an earlier addition shifts the new numbering, the two spaces
+// overlap and one selector reaches changes in both.
+//
+// The result is that list can print a row whose selector stages more than the
+// row describes. This test asserts the behavior as it is so the suite records
+// it. Fixing the numbering flips these assertions, which is the point.
+func TestListSelectorsCollideAcrossNumbering(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "main.go", "package main\n\nfunc main() {\n\told()\n}\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	// The two added lines shift every later new-file number up by two, so
+	// the deletion's old-file line 4 aliases the new-file line 4 that the
+	// first group already claims.
+	writeFile(t, dir, "main.go",
+		"package main\n\nimport \"log\"\n\nfunc main() {\n\tnew()\n}\n",
+	)
+
+	groups := listGroups(t, dir)
+	require.Len(t, groups, 2)
+
+	first, second := groups[0], groups[1]
+	require.LessOrEqual(t, second.Start, first.End,
+		"the defect is that the ranges overlap; without the overlap "+
+			"the rest of this test is meaningless",
+	)
+
+	gitCmd(t, dir, "reset")
+
+	_, err := runCLI(t, "--dir", dir, "stage", first.Selector)
+	require.NoError(t, err)
+
+	added, deleted := countStaged(t, dir)
+	require.Greater(t, added+deleted, first.Added+first.Deleted,
+		"KNOWN DEFECT: staging %s reaches past the row it describes",
+		first.Selector,
+	)
+
+	gitCmd(t, dir, "reset")
+}
+
+// TestListMixedBlockIsOneRow pins the atomicity rule. The deletions and the
+// additions here touch, so they are one replacement: listing them as separate
+// rows would offer a selection that stages a file state that never existed.
+func TestListMixedBlockIsOneRow(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "main.go", "keep\nold1\nold2\nkeep2\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	writeFile(t, dir, "main.go", "keep\nnew1\nnew2\nkeep2\n")
+
+	groups := listGroups(t, dir)
+	require.Len(t, groups, 1,
+		"a touching delete/add run is one replacement, not two rows",
+	)
+	require.Equal(t, 2, groups[0].Added)
+	require.Equal(t, 2, groups[0].Deleted)
 }

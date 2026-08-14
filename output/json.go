@@ -38,6 +38,24 @@ type LineOutput struct {
 	NewLineNum int    `json:"new_line,omitempty"`
 }
 
+// GroupListOutput is the top-level JSON output for a change-group listing.
+type GroupListOutput struct {
+	Groups    []GroupOutput `json:"groups"`
+	Untracked []string      `json:"untracked,omitempty"`
+}
+
+// GroupOutput represents one independently stageable change group.
+type GroupOutput struct {
+	// Selector is the FILE:LINES argument that stages this group.
+	Selector string `json:"selector"`
+	Path     string `json:"path"`
+	Start    int    `json:"start"`
+	End      int    `json:"end"`
+	Added    int    `json:"added"`
+	Deleted  int    `json:"deleted"`
+	Preview  string `json:"preview"`
+}
+
 // FormatJSON writes the parsed diff as JSON.
 func FormatJSON(w io.Writer, parsed *diff.ParsedDiff) error {
 	return FormatJSONWithUntracked(w, parsed, nil)
@@ -84,6 +102,33 @@ func FormatJSONWithUntracked(w io.Writer, parsed *diff.ParsedDiff, untracked []s
 		}
 
 		output.Files = append(output.Files, fo)
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(output)
+}
+
+// FormatJSONGroups writes the diff's change groups as JSON.
+func FormatJSONGroups(w io.Writer, parsed *diff.ParsedDiff, untracked []string) error {
+	output := GroupListOutput{
+		Groups:    make([]GroupOutput, 0),
+		Untracked: untracked,
+	}
+
+	if parsed != nil {
+		for group := range parsed.ChangeGroups() {
+			output.Groups = append(output.Groups, GroupOutput{
+				Selector: group.Selector(),
+				Path:     group.Path,
+				Start:    group.Start,
+				End:      group.End,
+				Added:    group.Added,
+				Deleted:  group.Deleted,
+				Preview:  group.Preview,
+			})
+		}
 	}
 
 	enc := json.NewEncoder(w)
