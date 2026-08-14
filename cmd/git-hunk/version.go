@@ -1,29 +1,15 @@
 package main
 
-import (
-	"fmt"
-	"io"
-
-	"github.com/spf13/cobra"
-)
+import "fmt"
 
 // Version is the current version of git-hunk.
 const Version = "v1.0.2"
 
-// newVersionCmd creates the version command.
-func newVersionCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "version",
-		Short: "Print the version number",
-		Long:  `Print the version number of git-hunk.`,
-		Run: func(cmd *cobra.Command, _ []string) {
-			printVersion(cmd.OutOrStdout())
-		},
-	}
+// VersionCmd prints the version number of git-hunk.
+type VersionCmd struct{}
 
-	return cmd
-}
+func (c *VersionCmd) Run(g *Globals) error {
+	fmt.Fprintf(g.Out, "git-hunk %s\n", Version)
 
-func printVersion(w io.Writer) {
-	fmt.Fprintf(w, "git-hunk %s\n", Version)
+	return nil
 }

@@ -3,45 +3,31 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
-
-	"github.com/rdeusser/git-hunk/git"
-	"github.com/spf13/cobra"
 )
 
-// newApplyPatchCmd creates the apply-patch command.
-func newApplyPatchCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "apply-patch [file]",
-		Short: "Apply a patch to the staging area",
-		Long: `Apply a unified diff patch to the staging area.
+// ApplyPatchCmd applies a unified diff patch to the staging area.
+type ApplyPatchCmd struct {
+	File string `arg:"" optional:"" help:"Patch file to apply; reads stdin when omitted."`
+}
 
-If no file is specified, reads from stdin.
-This is equivalent to 'git apply --cached'.`,
-		Example: `  # Apply patch from file
+func (c *ApplyPatchCmd) Help() string {
+	return `If no file is specified, reads from stdin.
+This is equivalent to 'git apply --cached'.
+
+Examples:
+  # Apply patch from file
   git-hunk apply-patch changes.patch
 
   # Apply patch from stdin (useful for piping)
-  cat changes.patch | git-hunk apply-patch`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runApplyPatch(cmd.Context(), cmd.OutOrStdout(), args)
-		},
-	}
-
-	return cmd
+  cat changes.patch | git-hunk apply-patch`
 }
 
-func runApplyPatch(ctx context.Context, w io.Writer, args []string) error {
-	cfg := getConfig(ctx)
+func (c *ApplyPatchCmd) Run(ctx context.Context, g *Globals) error {
+	input := g.In
 
-	var input io.Reader
-
-	if len(args) == 0 {
-		input = os.Stdin
-	} else {
-		f, err := os.Open(args[0])
+	if c.File != "" {
+		f, err := os.Open(c.File)
 		if err != nil {
 			return fmt.Errorf("failed to open patch file: %w", err)
 		}
@@ -50,13 +36,11 @@ func runApplyPatch(ctx context.Context, w io.Writer, args []string) error {
 		input = f
 	}
 
-	executor := git.NewShellExecutor(cfg.WorkDir)
-
-	if err := executor.ApplyPatch(ctx, input); err != nil {
+	if err := g.Git.ApplyPatch(ctx, input); err != nil {
 		return err
 	}
 
-	fmt.Fprintln(w, "Patch applied to staging area.")
+	fmt.Fprintln(g.Out, "Patch applied to staging area.")
 
 	return nil
 }

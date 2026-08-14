@@ -22,7 +22,7 @@ go test -v ./diff/... -run TestParse  # Run specific test
 Hunk follows a **functional core / imperative shell** architecture:
 
 ```
-CLI (commands/) → Functional Core (diff/, patch/, output/) → Git Shell (git/)
+CLI (cmd/git-hunk/) → Functional Core (diff/, patch/, output/) → Git Shell (git/)
 ```
 
 **Functional Core** (pure, no side effects):
@@ -31,8 +31,9 @@ CLI (commands/) → Functional Core (diff/, patch/, output/) → Git Shell (git/
 - `output/` - JSON and text formatters. Takes `io.Writer` for testability.
 
 **Imperative Shell** (I/O, side effects):
-- `git/` - Executor interface abstracting git operations. `ShellExecutor` shells out to git.
-- `commands/` - Cobra CLI commands. Config passed via context, not globals.
+- `git/` - `ShellExecutor` runs git operations by shelling out to the git binary.
+- `cmd/git-hunk/` - Kong CLI commands. `main` builds the grammar and injects
+  dependencies through `Globals`.
 
 ## Key Patterns
 

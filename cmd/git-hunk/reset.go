@@ -3,52 +3,42 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
-
-	"github.com/rdeusser/git-hunk/git"
-	"github.com/spf13/cobra"
 )
 
-// newResetCmd creates the reset command.
-func newResetCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "reset [files...]",
-		Short: "Unstage changes",
-		Long: `Unstage all staged changes, or specific files if specified.
+// ResetCmd unstages all staged changes, or only the named files.
+type ResetCmd struct {
+	Paths []string `arg:"" name:"file" optional:"" help:"Files to unstage."`
+}
 
-This is equivalent to 'git reset HEAD'.`,
-		Example: `  # Unstage all changes
+func (c *ResetCmd) Help() string {
+	return `This is equivalent to 'git reset HEAD'.
+
+Examples:
+  # Unstage all changes
   git-hunk reset
 
   # Unstage specific file
-  git-hunk reset main.go`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runReset(cmd.Context(), cmd.OutOrStdout(), args)
-		},
-	}
-
-	return cmd
+  git-hunk reset main.go`
 }
 
-func runReset(ctx context.Context, w io.Writer, paths []string) error {
-	cfg := getConfig(ctx)
-	executor := git.NewShellExecutor(cfg.WorkDir)
-
-	if len(paths) == 0 {
-		if err := executor.Reset(ctx); err != nil {
+func (c *ResetCmd) Run(ctx context.Context, g *Globals) error {
+	if len(c.Paths) == 0 {
+		if err := g.Git.Reset(ctx); err != nil {
 			return err
 		}
 
-		fmt.Fprintln(w, "Unstaged all changes.")
-	} else {
-		for _, path := range paths {
-			if err := executor.ResetPath(ctx, path); err != nil {
-				return err
-			}
-		}
+		fmt.Fprintln(g.Out, "Unstaged all changes.")
 
-		fmt.Fprintf(w, "Unstaged %d file(s).\n", len(paths))
+		return nil
 	}
+
+	for _, path := range c.Paths {
+		if err := g.Git.ResetPath(ctx, path); err != nil {
+			return err
+		}
+	}
+
+	fmt.Fprintf(g.Out, "Unstaged %d file(s).\n", len(c.Paths))
 
 	return nil
 }

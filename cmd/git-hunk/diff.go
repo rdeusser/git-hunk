@@ -3,34 +3,30 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/rdeusser/git-hunk/diff"
-	"github.com/rdeusser/git-hunk/git"
 	"github.com/rdeusser/git-hunk/output"
-	"github.com/spf13/cobra"
 )
 
-// newDiffCmd creates the diff command.
-func newDiffCmd() *cobra.Command {
-	var (
-		staged      bool
-		showRaw     bool
-		showFiles   bool
-		showSummary bool
-		showStage   bool
-	)
+// DiffCmd shows unstaged (or staged) changes with line numbers.
+type DiffCmd struct {
+	Paths []string `arg:"" name:"file" optional:"" help:"Limit output to these files."`
 
-	cmd := &cobra.Command{
-		Use:   "diff [files...]",
-		Short: "Show changes with line numbers",
-		Long: `Show unstaged (or staged) changes with line numbers.
+	Staged     bool `help:"Show staged changes instead of unstaged."`
+	Raw        bool `help:"Show raw unified diff."`
+	Files      bool `help:"Show only file names."`
+	Summary    bool `help:"Show summary statistics."`
+	StageHints bool `help:"Show suggested git-hunk stage commands."`
+}
 
-Each line is prefixed with its line number in the new file,
+func (c *DiffCmd) Help() string {
+	return `Each line is prefixed with its line number in the new file,
 making it easy to specify line ranges for staging.
 
-Use --json for machine-readable output suitable for AI agents.`,
-		Example: `  # Show all unstaged changes
+Use --json for machine-readable output suitable for AI agents.
+
+Examples:
+  # Show all unstaged changes
   git-hunk diff
 
   # Show changes for specific files
@@ -43,61 +39,19 @@ Use --json for machine-readable output suitable for AI agents.`,
   git-hunk diff --json
 
   # Show suggested stage commands
-  git-hunk diff --stage-hints`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDiff(cmd.Context(), cmd.OutOrStdout(), args, diffOptions{
-				staged:      staged,
-				showRaw:     showRaw,
-				showFiles:   showFiles,
-				showSummary: showSummary,
-				showStage:   showStage,
-			})
-		},
-	}
-
-	cmd.Flags().BoolVar(
-		&staged, "staged", false,
-		"show staged changes instead of unstaged",
-	)
-	cmd.Flags().BoolVar(
-		&showRaw, "raw", false,
-		"show raw unified diff",
-	)
-	cmd.Flags().BoolVar(
-		&showFiles, "files", false,
-		"show only file names",
-	)
-	cmd.Flags().BoolVar(
-		&showSummary, "summary", false,
-		"show summary statistics",
-	)
-	cmd.Flags().BoolVar(
-		&showStage, "stage-hints", false,
-		"show suggested git-hunk stage commands",
-	)
-
-	return cmd
+  git-hunk diff --stage-hints`
 }
 
-type diffOptions struct {
-	staged      bool
-	showRaw     bool
-	showFiles   bool
-	showSummary bool
-	showStage   bool
-}
+func (c *DiffCmd) Run(ctx context.Context, g *Globals) error {
+	var (
+		diffText string
+		err      error
+	)
 
-func runDiff(ctx context.Context, w io.Writer, paths []string, opts diffOptions) error {
-	cfg := getConfig(ctx)
-	executor := git.NewShellExecutor(cfg.WorkDir)
-
-	var diffText string
-	var err error
-
-	if opts.staged {
-		diffText, err = executor.DiffCached(ctx, paths...)
+	if c.Staged {
+		diffText, err = g.Git.DiffCached(ctx, c.Paths...)
 	} else {
-		diffText, err = executor.Diff(ctx, paths...)
+		diffText, err = g.Git.Diff(ctx, c.Paths...)
 	}
 
 	if err != nil {
@@ -106,20 +60,21 @@ func runDiff(ctx context.Context, w io.Writer, paths []string, opts diffOptions)
 
 	// Get untracked files for awareness (only for unstaged diffs).
 	var untracked []string
-	if !opts.staged {
-		status, statusErr := executor.Status(ctx)
+	if !c.Staged {
+		status, statusErr := g.Git.Status(ctx)
 		if statusErr == nil && len(status.UntrackedFiles) > 0 {
 			untracked = status.UntrackedFiles
 		}
 	}
 
 	if diffText == "" {
-		if cfg.JSONOut {
-			return output.FormatJSONEmptyWithUntracked(w, untracked)
+		if g.JSON {
+			return output.FormatJSONEmptyWithUntracked(g.Out, untracked)
 		}
 
 		if len(untracked) > 0 {
-			fmt.Fprintf(w, "(%d untracked file(s) not shown - use git add)\n",
+			fmt.Fprintf(g.Out,
+				"(%d untracked file(s) not shown - use git add)\n",
 				len(untracked))
 		}
 
@@ -131,23 +86,24 @@ func runDiff(ctx context.Context, w io.Writer, paths []string, opts diffOptions)
 		return err
 	}
 
-	if cfg.JSONOut {
-		return output.FormatJSONWithUntracked(w, parsed, untracked)
+	if g.JSON {
+		return output.FormatJSONWithUntracked(g.Out, parsed, untracked)
 	}
 
 	// Handle different output modes.
 	var formatErr error
+
 	switch {
-	case opts.showRaw:
-		formatErr = output.FormatRaw(w, parsed)
-	case opts.showFiles:
-		formatErr = output.FormatFileList(w, parsed)
-	case opts.showSummary:
-		formatErr = output.FormatTextSummary(w, parsed)
-	case opts.showStage:
-		formatErr = output.FormatStagingCommands(w, parsed)
+	case c.Raw:
+		formatErr = output.FormatRaw(g.Out, parsed)
+	case c.Files:
+		formatErr = output.FormatFileList(g.Out, parsed)
+	case c.Summary:
+		formatErr = output.FormatTextSummary(g.Out, parsed)
+	case c.StageHints:
+		formatErr = output.FormatStagingCommands(g.Out, parsed)
 	default:
-		formatErr = output.FormatText(w, parsed, output.DefaultTextOptions())
+		formatErr = output.FormatText(g.Out, parsed, output.DefaultTextOptions())
 	}
 
 	if formatErr != nil {
@@ -155,8 +111,9 @@ func runDiff(ctx context.Context, w io.Writer, paths []string, opts diffOptions)
 	}
 
 	// Show note about untracked files.
-	if len(untracked) > 0 && !opts.showRaw {
-		fmt.Fprintf(w, "\n(%d untracked file(s) not shown - use git add)\n",
+	if len(untracked) > 0 && !c.Raw {
+		fmt.Fprintf(g.Out,
+			"\n(%d untracked file(s) not shown - use git add)\n",
 			len(untracked))
 	}
 

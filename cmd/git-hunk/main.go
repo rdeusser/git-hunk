@@ -3,53 +3,14 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 
-	"github.com/spf13/cobra"
+	"github.com/alecthomas/kong"
+	"github.com/rdeusser/git-hunk/git"
 )
 
-// configKey is the context key for runtime config.
-type configKey struct{}
-
-// Config holds runtime configuration for commands.
-type Config struct {
-	WorkDir string
-	JSONOut bool
-}
-
-// getConfig retrieves config from context, or returns defaults.
-func getConfig(ctx context.Context) Config {
-	if cfg, ok := ctx.Value(configKey{}).(Config); ok {
-		return cfg
-	}
-
-	return Config{}
-}
-
-func main() {
-	if err := newRootCmd().Execute(); err != nil {
-		os.Exit(1)
-	}
-}
-
-// newRootCmd builds the root command and attaches every subcommand.
-func newRootCmd() *cobra.Command {
-	var (
-		workDir string
-		jsonOut bool
-	)
-
-	cmd := &cobra.Command{
-		Use:     "git-hunk",
-		Short:   "Sparse partial commits for AI agents",
-		Version: Version,
-		// Cobra prints the full usage block whenever a RunE returns
-		// an error. That hid real failures behind a wall of help text
-		// (e.g. "patch does not apply" buried under flag listings).
-		// Silence usage on errors so callers — including AI agents
-		// piping output — see a clean `Error: ...` line.
-		SilenceUsage: true,
-		Long: `git-hunk enables precise, line-level staging for git commits.
+const description = `git-hunk enables precise, line-level staging for git commits.
 
 Designed for AI agents that need to make surgical changes to codebases,
 git-hunk provides a simple interface for selecting and staging specific lines
@@ -75,34 +36,87 @@ Examples:
   git-hunk commit -m "add error handling"
 
   # Apply a patch directly to staging
-  git-hunk apply-patch < changes.diff`,
-		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
-			// Store config in context for subcommands.
-			cfg := Config{
-				WorkDir: workDir,
-				JSONOut: jsonOut,
-			}
-			ctx := context.WithValue(cmd.Context(), configKey{}, cfg)
-			cmd.SetContext(ctx)
-		},
+  git-hunk apply-patch < changes.diff`
+
+// CLI is the command grammar. Kong derives every command name, flag, and
+// help string from the tags below.
+type CLI struct {
+	Dir  string `short:"C" placeholder:"PATH" help:"Run as if git was started in this directory."`
+	JSON bool   `help:"Output in JSON format (for machine consumption)."`
+
+	Diff       DiffCmd       `cmd:"" help:"Show changes with line numbers."`
+	Stage      StageCmd      `cmd:"" help:"Stage specific lines."`
+	Preview    PreviewCmd    `cmd:"" help:"Show staged changes."`
+	Commit     CommitCmd     `cmd:"" help:"Commit staged changes."`
+	Reset      ResetCmd      `cmd:"" help:"Unstage changes."`
+	ApplyPatch ApplyPatchCmd `cmd:"" help:"Apply a patch to the staging area."`
+	Version    VersionCmd    `cmd:"" help:"Print the version number."`
+}
+
+// Globals carries the process I/O and the repository handle that every
+// subcommand needs. Kong injects it into each Run method.
+type Globals struct {
+	Git  *git.ShellExecutor
+	In   io.Reader
+	Out  io.Writer
+	JSON bool
+}
+
+func main() {
+	err := run(
+		context.Background(), os.Args[1:],
+		os.Stdin, os.Stdout, os.Stderr,
+	)
+	if err != nil {
+		os.Exit(1)
+	}
+}
+
+// run parses argv and executes the selected command. Failures are reported on
+// errOut and returned rather than exiting, which keeps the whole CLI — error
+// paths included — reachable from tests.
+//
+// Usage is deliberately never printed alongside an error: a wall of help text
+// buried real failures such as "patch does not apply", and callers piping our
+// output want a clean error line.
+func run(
+	ctx context.Context, argv []string,
+	in io.Reader, out, errOut io.Writer,
+) error {
+	var cli CLI
+
+	parser := newParser(ctx, &cli, out, errOut)
+
+	kctx, err := parser.Parse(argv)
+	if err != nil {
+		parser.Errorf("%s", err)
+
+		return err
 	}
 
-	cmd.PersistentFlags().StringVarP(
-		&workDir, "dir", "C", "",
-		"run as if git was started in this directory",
-	)
-	cmd.PersistentFlags().BoolVar(
-		&jsonOut, "json", false,
-		"output in JSON format (for machine consumption)",
-	)
+	err = kctx.Run(&Globals{
+		Git:  git.NewShellExecutor(cli.Dir),
+		In:   in,
+		Out:  out,
+		JSON: cli.JSON,
+	})
+	if err != nil {
+		parser.Errorf("%s", err)
+	}
 
-	cmd.AddCommand(newDiffCmd())
-	cmd.AddCommand(newStageCmd())
-	cmd.AddCommand(newPreviewCmd())
-	cmd.AddCommand(newCommitCmd())
-	cmd.AddCommand(newResetCmd())
-	cmd.AddCommand(newApplyPatchCmd())
-	cmd.AddCommand(newVersionCmd())
+	return err
+}
 
-	return cmd
+// newParser builds the command grammar. The writers receive kong's own help
+// and error output; a running command writes to Globals.Out instead.
+func newParser(
+	ctx context.Context, cli *CLI, out, errOut io.Writer,
+) *kong.Kong {
+	return kong.Must(cli,
+		kong.Name("git-hunk"),
+		kong.Description(description),
+		kong.ConfigureHelp(kong.HelpOptions{Compact: true}),
+		kong.Writers(out, errOut),
+		kong.BindTo(ctx, (*context.Context)(nil)),
+	)
 }

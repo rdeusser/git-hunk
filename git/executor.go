@@ -1,3 +1,4 @@
+// Package git runs git commands against a repository on disk.
 package git
 
 import (
@@ -9,7 +10,7 @@ import (
 	"strings"
 )
 
-// ShellExecutor implements Executor by shelling out to git.
+// ShellExecutor runs git operations by shelling out to the git binary.
 type ShellExecutor struct {
 	// WorkDir is the working directory for git commands.
 	// If empty, uses current directory.
@@ -139,5 +140,14 @@ func (e *ShellExecutor) Root(ctx context.Context) (string, error) {
 	return strings.TrimSpace(output), nil
 }
 
-// Compile-time check that ShellExecutor implements Executor.
-var _ Executor = (*ShellExecutor)(nil)
+// RepoStatus represents the current state of the repository.
+type RepoStatus struct {
+	// StagedFiles lists files with staged changes.
+	StagedFiles []string
+
+	// UnstagedFiles lists files with unstaged changes.
+	UnstagedFiles []string
+
+	// UntrackedFiles lists untracked files.
+	UntrackedFiles []string
+}

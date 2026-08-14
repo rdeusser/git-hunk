@@ -4,31 +4,29 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/rdeusser/git-hunk/diff"
-	"github.com/rdeusser/git-hunk/git"
 	"github.com/rdeusser/git-hunk/patch"
-	"github.com/spf13/cobra"
 )
 
-// newStageCmd creates the stage command.
-func newStageCmd() *cobra.Command {
-	var dryRun bool
+// StageCmd stages specific lines from the working directory.
+type StageCmd struct {
+	Selections []string `arg:"" name:"FILE:LINES" help:"Lines to stage."`
 
-	cmd := &cobra.Command{
-		Use:   "stage FILE:LINES [FILE:LINES...]",
-		Short: "Stage specific lines",
-		Long: `Stage specific lines from the working directory.
+	DryRun bool `help:"Show what would be staged without staging."`
+}
 
-Lines are specified using FILE:LINES syntax where LINES can be:
+func (c *StageCmd) Help() string {
+	return `Lines are specified using FILE:LINES syntax where LINES can be:
   - A single line number: main.go:42
   - A range: main.go:10-20
   - Multiple ranges: main.go:10-20,30,40-50
 
 Line numbers refer to the NEW file (after changes).
-Use 'git-hunk diff' to see line numbers.`,
-		Example: `  # Stage lines 10-20 from main.go
+Use 'git-hunk diff' to see line numbers.
+
+Examples:
+  # Stage lines 10-20 from main.go
   git-hunk stage main.go:10-20
 
   # Stage multiple ranges from one file
@@ -38,33 +36,16 @@ Use 'git-hunk diff' to see line numbers.`,
   git-hunk stage main.go:10-20 utils.go:5-15
 
   # Preview what would be staged
-  git-hunk stage --dry-run main.go:10-20`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStage(cmd.Context(), cmd.OutOrStdout(), args, dryRun)
-		},
-	}
-
-	cmd.Flags().BoolVar(
-		&dryRun, "dry-run", false,
-		"show what would be staged without staging",
-	)
-
-	return cmd
+  git-hunk stage --dry-run main.go:10-20`
 }
 
-func runStage(ctx context.Context, w io.Writer, args []string, dryRun bool) error {
-	// Parse all selections.
-	selections, err := diff.ParseSelections(args)
+func (c *StageCmd) Run(ctx context.Context, g *Globals) error {
+	selections, err := diff.ParseSelections(c.Selections)
 	if err != nil {
 		return fmt.Errorf("invalid selection: %w", err)
 	}
 
-	cfg := getConfig(ctx)
-	executor := git.NewShellExecutor(cfg.WorkDir)
-
-	// Get the current diff.
-	diffText, err := executor.Diff(ctx)
+	diffText, err := g.Git.Diff(ctx)
 	if err != nil {
 		return err
 	}
@@ -78,7 +59,6 @@ func runStage(ctx context.Context, w io.Writer, args []string, dryRun bool) erro
 		return err
 	}
 
-	// Generate a patch for the selected lines.
 	patchBytes, err := patch.Generate(parsed, selections)
 	if err != nil {
 		return err
@@ -88,18 +68,17 @@ func runStage(ctx context.Context, w io.Writer, args []string, dryRun bool) erro
 		return fmt.Errorf("no matching lines found for selection")
 	}
 
-	if dryRun {
-		fmt.Fprint(w, string(patchBytes))
+	if c.DryRun {
+		fmt.Fprint(g.Out, string(patchBytes))
 
 		return nil
 	}
 
-	// Apply the patch to the staging area.
-	if err := executor.ApplyPatch(ctx, bytes.NewReader(patchBytes)); err != nil {
+	if err := g.Git.ApplyPatch(ctx, bytes.NewReader(patchBytes)); err != nil {
 		return fmt.Errorf("failed to stage changes: %w", err)
 	}
 
-	fmt.Fprintln(w, "Changes staged successfully.")
+	fmt.Fprintln(g.Out, "Changes staged successfully.")
 
 	return nil
 }

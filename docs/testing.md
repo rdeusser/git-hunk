@@ -7,7 +7,7 @@ This document describes the testing strategy and test harness for hunk.
 Hunk follows a **functional core / imperative shell** architecture:
 
 - **Functional Core** (`diff/`, `patch/`, `output/`): Pure functions with no side effects. Easy to test with unit tests.
-- **Imperative Shell** (`git/`, `commands/`): Handles I/O and side effects. Tested via integration tests.
+- **Imperative Shell** (`git/`, `cmd/git-hunk/`): Handles I/O and side effects. Tested via integration tests.
 
 ## Test Categories
 
@@ -193,7 +193,7 @@ go tool cover -html=coverage.txt
 | `patch/` | 85%+ | Patch generation |
 | `output/` | 70%+ | Output formatting |
 | `git/` | Integration only | Uses real git |
-| `commands/` | Integration only | Uses real git |
+| `cmd/git-hunk/` | Integration only | Uses real git |
 
 ## Property-Based Testing
 

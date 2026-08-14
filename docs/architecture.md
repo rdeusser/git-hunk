@@ -14,11 +14,11 @@ The codebase is structured around the functional core / imperative shell pattern
 
 The **functional core** lives in `diff/`, `patch/`, and `output/`. These packages contain pure functions that take data in and return data out. They don't touch the filesystem, don't shell out to git, don't have side effects. This makes them trivially testable with table-driven unit tests and amenable to property-based testing.
 
-The **imperative shell** lives in `git/` and `commands/`. This is where side effects happen: running git commands, reading files, writing output. The shell is kept deliberately thin—it orchestrates the core functions but contains minimal logic of its own.
+The **imperative shell** lives in `git/` and `cmd/git-hunk/`. This is where side effects happen: running git commands, reading files, writing output. The shell is kept deliberately thin—it orchestrates the core functions but contains minimal logic of its own.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      CLI (commands/)                        │
+│                    CLI (cmd/git-hunk/)                      │
 │  diff | stage | preview | commit | reset | apply-patch      │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -90,15 +90,15 @@ type Executor interface {
 
 The production implementation, `ShellExecutor`, shells out to the git binary. This might seem crude compared to using libgit2 or a pure Go implementation, but it has significant advantages: git is ubiquitous, battle-tested, and handles edge cases we'd otherwise have to reimplement. The cost is subprocess overhead, which is negligible for the operations hunk performs.
 
-The interface exists primarily for testability. Integration tests use `ShellExecutor` with real git repositories in temp directories. If we ever needed a mock implementation for specific test scenarios, the interface is there.
+Integration tests exercise `ShellExecutor` against real git repositories in temp directories, which is the only way to be confident about how git actually behaves at the boundaries.
 
-### commands/
+### cmd/git-hunk/
 
-This package implements the CLI using Cobra. Each command is a thin layer that parses flags, calls into the functional core, and writes output.
+This package is the CLI, built on [Kong](https://github.com/alecthomas/kong). Each command is a struct whose tags declare its name, flags, and help text, plus a `Run` method that calls into the functional core and writes output.
 
-Commands receive configuration through context rather than global variables. The root command's `PersistentPreRun` hook stores the `--dir` and `--json` flags in the context, and subcommands retrieve them via `getConfig(ctx)`. This eliminates global state and makes commands easy to test in isolation.
+`main` is the composition root. It builds the grammar, constructs the `ShellExecutor` from `--dir`, and hands every command a `Globals` value carrying the executor, the process I/O, and the `--json` setting. Nothing is passed implicitly through the context, and there is no global state.
 
-Output goes through the command's writer (`cmd.OutOrStdout()`) rather than directly to `os.Stdout`. This allows tests to capture output without redirecting the process's stdout.
+Because the I/O writers arrive in `Globals`, tests capture output by passing buffers instead of redirecting the process's stdout. `run()` returns errors rather than exiting, so error paths are reachable from tests too.
 
 ### testutil/
 
@@ -136,7 +136,7 @@ The design is intentionally simple and focused. There's no plugin system, no con
 
 That said, the structure allows extension if needed:
 
-New commands can be added by implementing a Cobra command and wiring it into the root command. New output formats can be added by implementing a formatter function in `output/`. The git interface could be swapped for a mock or a different implementation if needed.
+New commands can be added by writing a struct with a `Run` method and adding a `cmd:""` field to `CLI`. New output formats can be added by implementing a formatter function in `output/`.
 
 ## Performance Considerations
 

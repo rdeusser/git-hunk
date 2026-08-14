@@ -3,60 +3,42 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/rdeusser/git-hunk/diff"
-	"github.com/rdeusser/git-hunk/git"
 	"github.com/rdeusser/git-hunk/output"
-	"github.com/spf13/cobra"
 )
 
-// newPreviewCmd creates the preview command.
-func newPreviewCmd() *cobra.Command {
-	var showRaw bool
+// PreviewCmd shows changes that are currently staged for commit.
+type PreviewCmd struct {
+	Raw bool `help:"Show raw unified diff."`
+}
 
-	cmd := &cobra.Command{
-		Use:   "preview",
-		Short: "Show staged changes",
-		Long: `Show changes that are currently staged for commit.
+func (c *PreviewCmd) Help() string {
+	return `This is equivalent to 'git diff --cached' but with hunk-style formatting.
 
-This is equivalent to 'git diff --cached' but with hunk-style formatting.`,
-		Example: `  # Show staged changes
+Examples:
+  # Show staged changes
   git-hunk preview
 
   # Show staged changes in JSON format
   git-hunk preview --json
 
   # Show raw unified diff
-  git-hunk preview --raw`,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runPreview(cmd.Context(), cmd.OutOrStdout(), showRaw)
-		},
-	}
-
-	cmd.Flags().BoolVar(
-		&showRaw, "raw", false,
-		"show raw unified diff",
-	)
-
-	return cmd
+  git-hunk preview --raw`
 }
 
-func runPreview(ctx context.Context, w io.Writer, showRaw bool) error {
-	cfg := getConfig(ctx)
-	executor := git.NewShellExecutor(cfg.WorkDir)
-
-	diffText, err := executor.DiffCached(ctx)
+func (c *PreviewCmd) Run(ctx context.Context, g *Globals) error {
+	diffText, err := g.Git.DiffCached(ctx)
 	if err != nil {
 		return err
 	}
 
 	if diffText == "" {
-		if cfg.JSONOut {
-			return output.FormatJSONEmpty(w)
+		if g.JSON {
+			return output.FormatJSONEmpty(g.Out)
 		}
 
-		fmt.Fprintln(w, "Nothing staged for commit.")
+		fmt.Fprintln(g.Out, "Nothing staged for commit.")
 
 		return nil
 	}
@@ -66,13 +48,13 @@ func runPreview(ctx context.Context, w io.Writer, showRaw bool) error {
 		return err
 	}
 
-	if cfg.JSONOut {
-		return output.FormatJSON(w, parsed)
+	if g.JSON {
+		return output.FormatJSON(g.Out, parsed)
 	}
 
-	if showRaw {
-		return output.FormatRaw(w, parsed)
+	if c.Raw {
+		return output.FormatRaw(g.Out, parsed)
 	}
 
-	return output.FormatText(w, parsed, output.DefaultTextOptions())
+	return output.FormatText(g.Out, parsed, output.DefaultTextOptions())
 }

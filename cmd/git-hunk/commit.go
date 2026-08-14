@@ -3,51 +3,26 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
-
-	"github.com/rdeusser/git-hunk/git"
-	"github.com/spf13/cobra"
 )
 
-// newCommitCmd creates the commit command.
-func newCommitCmd() *cobra.Command {
-	var message string
+// CommitCmd creates a commit with the currently staged changes.
+type CommitCmd struct {
+	Message string `short:"m" required:"" help:"Commit message."`
+}
 
-	cmd := &cobra.Command{
-		Use:   "commit",
-		Short: "Commit staged changes",
-		Long: `Create a commit with the currently staged changes.
+func (c *CommitCmd) Help() string {
+	return `This is a thin wrapper around 'git commit' for convenience.
 
-This is a thin wrapper around 'git commit' for convenience.`,
-		Example: `  # Commit with a message
+Examples:
+  # Commit with a message
   git-hunk commit -m "add error handling"
 
   # Stage and commit in one command
-  git-hunk stage main.go:10-20 && git-hunk commit -m "fix bug"`,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if message == "" {
-				return fmt.Errorf("commit message required (-m)")
-			}
-
-			return runCommit(cmd.Context(), cmd.OutOrStdout(), message)
-		},
-	}
-
-	cmd.Flags().StringVarP(
-		&message, "message", "m", "",
-		"commit message",
-	)
-	_ = cmd.MarkFlagRequired("message")
-
-	return cmd
+  git-hunk stage main.go:10-20 && git-hunk commit -m "fix bug"`
 }
 
-func runCommit(ctx context.Context, w io.Writer, message string) error {
-	cfg := getConfig(ctx)
-	executor := git.NewShellExecutor(cfg.WorkDir)
-
-	// Check if there are staged changes.
-	diffText, err := executor.DiffCached(ctx)
+func (c *CommitCmd) Run(ctx context.Context, g *Globals) error {
+	diffText, err := g.Git.DiffCached(ctx)
 	if err != nil {
 		return err
 	}
@@ -56,11 +31,11 @@ func runCommit(ctx context.Context, w io.Writer, message string) error {
 		return fmt.Errorf("nothing staged for commit")
 	}
 
-	if err := executor.Commit(ctx, message); err != nil {
+	if err := g.Git.Commit(ctx, c.Message); err != nil {
 		return err
 	}
 
-	fmt.Fprintln(w, "Committed successfully.")
+	fmt.Fprintln(g.Out, "Committed successfully.")
 
 	return nil
 }

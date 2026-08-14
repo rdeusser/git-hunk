@@ -11,7 +11,7 @@ linters:
     # Trust developers to keep lines readable.
     - lll
 
-    # Allow globals for command flags (Cobra pattern).
+    # Allow package-level declarations such as the version constant.
     - gochecknoglobals
 
     # Allow short variable names.
@@ -20,7 +20,7 @@ linters:
     # Allow TODOs in code.
     - godox
 
-    # Init functions needed for Cobra commands.
+    # Init functions are allowed.
     - gochecknoinits
 
     # Deprecated/problematic linters.
@@ -118,6 +118,22 @@ linters:
 
     nestif:
       min-complexity: 8
+
+    # Kong tags read best in the order they affect parsing: what the field
+    # is, then how it is spelled, then its help text. Column-aligning them
+    # is pointless when one tag holds a whole sentence.
+    tagalign:
+      align: false
+      order:
+        - cmd
+        - arg
+        - name
+        - short
+        - required
+        - optional
+        - placeholder
+        - default
+        - help
 
     tagliatelle:
       case:
