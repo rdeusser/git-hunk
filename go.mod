@@ -1,12 +1,12 @@
 module github.com/rdeusser/git-hunk
 
-go 1.23.0
+go 1.26.5
 
 require (
 	github.com/alecthomas/kong v1.16.1
 	github.com/sourcegraph/go-diff v0.8.0
-	github.com/stretchr/testify v1.9.0
-	pgregory.net/rapid v1.2.0
+	github.com/stretchr/testify v1.11.1
+	pgregory.net/rapid v1.3.0
 )
 
 require (
