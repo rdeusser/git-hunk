@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -1013,4 +1014,65 @@ func TestStageRenameWithModeChange(t *testing.T) {
 		"rename old.sh => new.sh",
 	)
 	require.Contains(t, gitCmd(t, dir, "ls-files", "-s", "new.sh"), "100755")
+}
+
+// TestStageRenameDoesNotClaimAnotherFilesPath covers a selection that two
+// file diffs can answer to: a.txt renamed away to c.txt, and a new a.txt
+// created at the vacated path. Resolving a selection by a rename's old name
+// unconditionally puts both in reach of "a.txt:2", and the patch stages
+// lines from c.txt that the caller never named.
+func TestStageRenameDoesNotClaimAnotherFilesPath(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	var original strings.Builder
+	for i := 1; i <= 20; i++ {
+		fmt.Fprintf(&original, "orig line %d\n", i)
+	}
+
+	writeFile(t, dir, "a.txt", original.String())
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	// Move a.txt to c.txt with an edit, then put a different file back at
+	// the path a.txt just vacated.
+	moved := strings.Replace(
+		original.String(), "orig line 2\n", "RENAMED FILE EDIT\n", 1,
+	)
+	require.NoError(t, os.Remove(filepath.Join(dir, "a.txt")))
+	writeFile(t, dir, "c.txt", moved)
+	writeFile(t, dir, "a.txt", "brand new 1\nNEW FILE LINE 2\nbrand new 3\n")
+	gitCmd(t, dir, "add", "-N", "c.txt", "a.txt")
+
+	output, err := runCLI(t, "--dir", dir, "stage", "--dry-run", "a.txt:2")
+	require.NoError(t, err)
+
+	require.NotContains(t, output, "c.txt",
+		"a selection naming a.txt must not reach the renamed file",
+	)
+	require.NotContains(t, output, "RENAMED FILE EDIT",
+		"no line from the renamed file may be staged",
+	)
+	require.Contains(t, output, "NEW FILE LINE 2")
+}
+
+// TestStageRenamedFileByOldName keeps the convenience the guard above must
+// not cost: while no other file holds the vacated path, a renamed file is
+// still selectable by the name it moved from.
+func TestStageRenamedFileByOldName(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "old.txt", "a\nb\nc\nd\ne\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	require.NoError(t, os.Remove(filepath.Join(dir, "old.txt")))
+	writeFile(t, dir, "new.txt", "a\nB2\nc\nD2\ne\n")
+	gitCmd(t, dir, "add", "-N", "new.txt")
+
+	_, err := runCLI(t, "--dir", dir, "stage", "old.txt:2")
+	require.NoError(t, err)
+
+	require.Equal(t, "a\nB2\nc\nd\ne\n", gitCmd(t, dir, "show", ":new.txt"))
 }

@@ -32,19 +32,12 @@ func Generate(
 ) ([]byte, error) {
 	// Build a map for fast lookup.
 	selMap := diff.NewSelectionMap(selections)
+	claimed := claimedPaths(parsed)
 
 	var buf bytes.Buffer
 
 	for file := range parsed.Files() {
-		sel := selMap.Get(file.Path())
-		if sel == nil {
-			// Try both old and new names.
-			sel = selMap.Get(file.OldName)
-			if sel == nil {
-				sel = selMap.Get(file.NewName)
-			}
-		}
-
+		sel := selectionFor(selMap, file, claimed)
 		if sel == nil {
 			continue
 		}
@@ -70,6 +63,38 @@ func Generate(
 	}
 
 	return buf.Bytes(), nil
+}
+
+// selectionFor resolves the selection naming file, or nil when the caller
+// asked for nothing in it. A file answers to its current path. A renamed
+// file also answers to the path it moved from, but only while no other file
+// in the diff still holds that path — renaming a.txt away and creating a
+// new a.txt puts both files in reach of one "a.txt:N" selection, and the
+// patch would then stage lines the caller never named.
+func selectionFor(
+	selMap diff.SelectionMap, file *diff.FileDiff, claimed map[string]bool,
+) *diff.FileSelection {
+	if sel := selMap.Get(file.Path()); sel != nil {
+		return sel
+	}
+
+	if file.IsRenamed && !claimed[file.OldName] {
+		return selMap.Get(file.OldName)
+	}
+
+	return nil
+}
+
+// claimedPaths collects the current path of every file in the diff, so that
+// a rename's old name can be recognized as still belonging to someone else.
+func claimedPaths(parsed *diff.ParsedDiff) map[string]bool {
+	paths := make(map[string]bool)
+
+	for file := range parsed.Files() {
+		paths[file.Path()] = true
+	}
+
+	return paths
 }
 
 // writeFileHeader writes the "--- "/"+++ " path lines for file, resolving
