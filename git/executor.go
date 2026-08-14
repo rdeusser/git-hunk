@@ -50,10 +50,7 @@ func (e *ShellExecutor) run(
 func (e *ShellExecutor) Diff(
 	ctx context.Context, paths ...string,
 ) (string, error) {
-	args := []string{"diff", "--no-color"}
-	args = append(args, paths...)
-
-	return e.run(ctx, nil, args...)
+	return e.run(ctx, nil, pathArgs([]string{"diff", "--no-color"}, paths)...)
 }
 
 // DiffCached returns the unified diff for staged changes.
@@ -61,9 +58,22 @@ func (e *ShellExecutor) DiffCached(
 	ctx context.Context, paths ...string,
 ) (string, error) {
 	args := []string{"diff", "--cached", "--no-color"}
-	args = append(args, paths...)
 
-	return e.run(ctx, nil, args...)
+	return e.run(ctx, nil, pathArgs(args, paths)...)
+}
+
+// pathArgs appends paths to args behind a "--" separator. Without it git
+// resolves each path as a revision first, so "diff main" fails outright in a
+// repository that has both a branch and a file called main, and a path that
+// only names a branch silently diffs against that branch instead.
+func pathArgs(args, paths []string) []string {
+	if len(paths) == 0 {
+		return args
+	}
+
+	args = append(args, "--")
+
+	return append(args, paths...)
 }
 
 // ApplyPatch applies a patch to the staging area.
@@ -89,9 +99,14 @@ func (e *ShellExecutor) Reset(ctx context.Context) error {
 	return err
 }
 
-// ResetPath unstages changes for a specific path.
-func (e *ShellExecutor) ResetPath(ctx context.Context, path string) error {
-	_, err := e.run(ctx, nil, "reset", "HEAD", "--", path)
+// ResetPaths unstages changes for the given paths in one git invocation, so
+// a path git rejects leaves the index untouched rather than half-reset.
+func (e *ShellExecutor) ResetPaths(
+	ctx context.Context, paths ...string,
+) error {
+	args := pathArgs([]string{"reset", "HEAD"}, paths)
+
+	_, err := e.run(ctx, nil, args...)
 
 	return err
 }
@@ -103,31 +118,55 @@ func (e *ShellExecutor) Status(ctx context.Context) (*RepoStatus, error) {
 		return nil, err
 	}
 
+	return parseStatus(output), nil
+}
+
+// parseStatus reads git's porcelain v1 -z output, whose entries are
+// "XY <path>\0" with X describing the index and Y the working tree.
+//
+// A rename or a copy appends a second "<origPath>\0" field to its entry.
+// Reading that field as an entry of its own takes its first two bytes for a
+// status code and files the rest under a path missing its first three
+// characters, so it is skipped explicitly.
+func parseStatus(output string) *RepoStatus {
 	status := &RepoStatus{}
 
-	// Parse porcelain output. Format: XY PATH\0
-	// X = staged status, Y = unstaged status.
-	entries := strings.Split(output, "\x00")
-	for _, entry := range entries {
-		if len(entry) < 3 {
+	fields := strings.Split(output, "\x00")
+
+	for i := 0; i < len(fields); i++ {
+		entry := fields[i]
+		if len(entry) < 4 {
 			continue
 		}
 
-		staged := entry[0]
-		unstaged := entry[1]
-		path := entry[3:]
+		index, worktree, path := entry[0], entry[1], entry[3:]
 
-		switch {
-		case staged == '?' && unstaged == '?':
+		if isRenameOrCopy(index) || isRenameOrCopy(worktree) {
+			i++
+		}
+
+		if index == '?' && worktree == '?' {
 			status.UntrackedFiles = append(status.UntrackedFiles, path)
-		case staged != ' ' && staged != '?':
+
+			continue
+		}
+
+		// The two sides are independent: "MM" is a file modified in the
+		// index and modified again since, and belongs on both lists.
+		if index != ' ' {
 			status.StagedFiles = append(status.StagedFiles, path)
-		case unstaged != ' ':
+		}
+
+		if worktree != ' ' {
 			status.UnstagedFiles = append(status.UnstagedFiles, path)
 		}
 	}
 
-	return status, nil
+	return status
+}
+
+func isRenameOrCopy(code byte) bool {
+	return code == 'R' || code == 'C'
 }
 
 // Root returns the repository root directory.

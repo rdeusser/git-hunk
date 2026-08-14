@@ -32,10 +32,8 @@ func (c *ResetCmd) Run(ctx context.Context, g *Globals) error {
 		return nil
 	}
 
-	for _, path := range c.Paths {
-		if err := g.Git.ResetPath(ctx, path); err != nil {
-			return err
-		}
+	if err := g.Git.ResetPaths(ctx, c.Paths...); err != nil {
+		return err
 	}
 
 	fmt.Fprintf(g.Out, "Unstaged %d file(s).\n", len(c.Paths))

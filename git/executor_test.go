@@ -176,7 +176,7 @@ func TestShellExecutorReset(t *testing.T) {
 	require.Empty(t, diffText)
 }
 
-func TestShellExecutorResetPath(t *testing.T) {
+func TestShellExecutorResetPaths(t *testing.T) {
 	dir, cleanup := setupTestRepo(t)
 	defer cleanup()
 
@@ -195,7 +195,7 @@ func TestShellExecutorResetPath(t *testing.T) {
 	ctx := context.Background()
 
 	// Reset just a.go.
-	err := executor.ResetPath(ctx, "a.go")
+	err := executor.ResetPaths(ctx, "a.go")
 	require.NoError(t, err)
 
 	// Verify a.go is unstaged but b.go is still staged.
@@ -295,4 +295,71 @@ func gitCmd(t *testing.T, dir string, args ...string) string {
 	}
 
 	return string(out)
+}
+
+// TestShellExecutorStatusWithRename covers git's porcelain -z framing. A
+// rename entry carries a second NUL-terminated field holding the original
+// path; read as an entry of its own it yields a path missing its first three
+// characters, filed under whatever its first two bytes happen to spell.
+func TestShellExecutorStatusWithRename(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "originalfile.go", "package a\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+	gitCmd(t, dir, "mv", "originalfile.go", "renamed.go")
+
+	executor := git.NewShellExecutor(dir)
+
+	status, err := executor.Status(context.Background())
+	require.NoError(t, err)
+
+	require.Equal(t, []string{"renamed.go"}, status.StagedFiles)
+	require.Empty(t, status.UnstagedFiles)
+	require.Empty(t, status.UntrackedFiles)
+}
+
+// TestShellExecutorStatusStagedAndUnstaged covers the "MM" case: the index
+// and the working tree report independently, so a file changed on both sides
+// belongs on both lists.
+func TestShellExecutorStatusStagedAndUnstaged(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "a.go", "package a\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	writeFile(t, dir, "a.go", "package a\n// staged\n")
+	gitCmd(t, dir, "add", "a.go")
+	writeFile(t, dir, "a.go", "package a\n// staged\n// and more\n")
+
+	executor := git.NewShellExecutor(dir)
+
+	status, err := executor.Status(context.Background())
+	require.NoError(t, err)
+
+	require.Equal(t, []string{"a.go"}, status.StagedFiles)
+	require.Equal(t, []string{"a.go"}, status.UnstagedFiles)
+}
+
+// TestShellExecutorDiffPathNamedLikeRevision covers the "--" separator. Git
+// resolves arguments as revisions before paths, so a file sharing a name
+// with a branch is rejected as ambiguous, and one that only names a branch
+// silently diffs against the branch instead.
+func TestShellExecutorDiffPathNamedLikeRevision(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "main", "x\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+	writeFile(t, dir, "main", "CHANGED\n")
+
+	executor := git.NewShellExecutor(dir)
+
+	diffText, err := executor.Diff(context.Background(), "main")
+	require.NoError(t, err, "a path sharing a branch name must still diff")
+	require.Contains(t, diffText, "+CHANGED")
 }
