@@ -12,7 +12,7 @@ GOLINT_PKG := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 
 GO_BIN := ${GOPATH}/bin
 
-COMMIT := $(shell git describe --tags --dirty 2>/dev/null || echo "dev")
+VERSION := $(shell git describe --tags --dirty 2>/dev/null || echo "dev")
 
 GOBUILD := $(GOCC) build -v
 GOINSTALL := $(GOCC) install -v
@@ -25,8 +25,10 @@ RM := rm -f
 MAKE := make
 XARGS := xargs -L 1
 
-# Build flags.
-DEV_LDFLAGS := -ldflags "-X $(PKG)/build.Commit=$(COMMIT)"
+# Build flags. The -X target must name a real variable: it used to point at
+# a "build" package that does not exist, so the stamp was silently dropped
+# and the binary reported a hardcoded version instead.
+DEV_LDFLAGS := -ldflags "-X main.Version=$(VERSION)"
 
 # Testing flags.
 TEST_FLAGS ?=
