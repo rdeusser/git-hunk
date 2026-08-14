@@ -5,6 +5,8 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/alecthomas/kong"
 	"github.com/rdeusser/git-hunk/git"
@@ -63,10 +65,18 @@ type Globals struct {
 }
 
 func main() {
-	err := run(
-		context.Background(), os.Args[1:],
-		os.Stdin, os.Stdout, os.Stderr,
+	// Cancelling on a signal is what stops a long git command from
+	// outliving us. The executor turns that cancellation into SIGTERM so
+	// git unlinks .git/index.lock on its way out; killing it outright
+	// would strand the lock and wedge the repository.
+	ctx, stop := signal.NotifyContext(
+		context.Background(), os.Interrupt, syscall.SIGTERM,
 	)
+
+	err := run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
+
+	stop()
+
 	if err != nil {
 		os.Exit(1)
 	}

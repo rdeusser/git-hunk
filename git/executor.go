@@ -8,7 +8,14 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"syscall"
+	"time"
 )
+
+// terminateGrace is how long a git command gets to clean up after SIGTERM
+// before Go kills it outright. Git only has to unlink its lockfiles, so the
+// window is generous; nothing waits on it except a cancelled command.
+const terminateGrace = 2 * time.Second
 
 // ShellExecutor runs git operations by shelling out to the git binary.
 type ShellExecutor struct {
@@ -30,6 +37,17 @@ func (e *ShellExecutor) run(
 	if e.WorkDir != "" {
 		cmd.Dir = e.WorkDir
 	}
+
+	// CommandContext cancels with SIGKILL, which git cannot handle. Killed
+	// between taking .git/index.lock and renaming it over the index, git
+	// leaves the lock behind and every later command in the repository
+	// fails until someone removes it by hand. SIGTERM runs git's own
+	// cleanup instead, and WaitDelay bounds how long that cleanup gets
+	// before Go escalates to SIGKILL anyway.
+	cmd.Cancel = func() error {
+		return cmd.Process.Signal(syscall.SIGTERM)
+	}
+	cmd.WaitDelay = terminateGrace
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

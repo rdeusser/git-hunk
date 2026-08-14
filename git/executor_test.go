@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rdeusser/git-hunk/git"
 	"github.com/stretchr/testify/require"
@@ -362,4 +363,37 @@ func TestShellExecutorDiffPathNamedLikeRevision(t *testing.T) {
 	diffText, err := executor.Diff(context.Background(), "main")
 	require.NoError(t, err, "a path sharing a branch name must still diff")
 	require.Contains(t, diffText, "+CHANGED")
+}
+
+// TestShellExecutorCancelTerminatesGently covers what a cancelled context
+// does to a running git command. Go's default is SIGKILL, which git cannot
+// handle: killed while it holds .git/index.lock, git leaves the lock behind
+// and every later command in the repository fails until someone removes it
+// by hand. The command must die of SIGTERM instead, which git catches.
+func TestShellExecutorCancelTerminatesGently(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "f.txt", "a\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+	writeFile(t, dir, "f.txt", "b\n")
+
+	// An external diff helper blocks git long enough to cancel it. The
+	// helper drops its inherited stdout so that git alone holds the pipe;
+	// otherwise Wait sits out the whole WaitDelay draining it.
+	helper := filepath.Join(dir, "slowdiff.sh")
+	script := "#!/bin/sh\nexec >/dev/null 2>&1\nsleep 30\n"
+	require.NoError(t, os.WriteFile(helper, []byte(script), 0755))
+	t.Setenv("GIT_EXTERNAL_DIFF", helper)
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(), 200*time.Millisecond,
+	)
+	defer cancel()
+
+	_, err := git.NewShellExecutor(dir).Diff(ctx)
+	require.ErrorContains(t, err, "signal: terminated",
+		"a cancelled git command must get SIGTERM, not SIGKILL",
+	)
 }
