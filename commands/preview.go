@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/roasbeef/hunk/diff"
-	"github.com/roasbeef/hunk/git"
-	"github.com/roasbeef/hunk/output"
+	"github.com/rdeusser/git-hunk/diff"
+	"github.com/rdeusser/git-hunk/git"
+	"github.com/rdeusser/git-hunk/output"
 	"github.com/spf13/cobra"
 )
 

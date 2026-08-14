@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/roasbeef/hunk/git"
+	"github.com/rdeusser/git-hunk/git"
 	"github.com/spf13/cobra"
 )
 

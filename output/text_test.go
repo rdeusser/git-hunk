@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/roasbeef/hunk/diff"
-	"github.com/roasbeef/hunk/output"
+	"github.com/rdeusser/git-hunk/diff"
+	"github.com/rdeusser/git-hunk/output"
 	"github.com/stretchr/testify/require"
 )
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roasbeef/hunk/diff"
+	"github.com/rdeusser/git-hunk/diff"
 	"github.com/stretchr/testify/require"
 )
 

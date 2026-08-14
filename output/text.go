@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/roasbeef/hunk/diff"
+	"github.com/rdeusser/git-hunk/diff"
 )
 
 // Colors for terminal output.

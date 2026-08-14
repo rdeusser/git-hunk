@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/roasbeef/hunk/diff"
+	"github.com/rdeusser/git-hunk/diff"
 )
 
 // DiffOutput is the top-level JSON output structure.

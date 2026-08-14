@@ -1,4 +1,4 @@
-module github.com/roasbeef/hunk/tools
+module github.com/rdeusser/git-hunk/tools
 
 go 1.24.0
 

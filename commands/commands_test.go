@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/roasbeef/hunk/commands"
+	"github.com/rdeusser/git-hunk/commands"
 	"github.com/stretchr/testify/require"
 )
 

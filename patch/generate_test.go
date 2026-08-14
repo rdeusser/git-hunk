@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roasbeef/hunk/diff"
-	"github.com/roasbeef/hunk/patch"
+	"github.com/rdeusser/git-hunk/diff"
+	"github.com/rdeusser/git-hunk/patch"
 	"github.com/stretchr/testify/require"
 )
 

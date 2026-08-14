@@ -33,13 +33,13 @@ main.go
 ## Installation
 
 ```bash
-go install github.com/roasbeef/hunk/cmd/hunk@latest
+go install github.com/rdeusser/git-hunk/cmd/hunk@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/roasbeef/hunk.git
+git clone https://github.com/rdeusser/git-hunk.git
 cd hunk
 make build
 ```

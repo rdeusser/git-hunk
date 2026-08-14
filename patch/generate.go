@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/roasbeef/hunk/diff"
+	"github.com/rdeusser/git-hunk/diff"
 )
 
 // noNewlineMarker is the unified-diff sentinel emitted after a line that is

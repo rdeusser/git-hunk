@@ -3,7 +3,7 @@ package testutil_test
 import (
 	"testing"
 
-	"github.com/roasbeef/hunk/testutil"
+	"github.com/rdeusser/git-hunk/testutil"
 	"github.com/stretchr/testify/require"
 )
 

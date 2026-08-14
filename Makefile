@@ -1,4 +1,4 @@
-PKG := github.com/roasbeef/hunk
+PKG := github.com/rdeusser/git-hunk
 TOOLS_DIR := tools
 TOOLS_MOD := $(TOOLS_DIR)/go.mod
 
