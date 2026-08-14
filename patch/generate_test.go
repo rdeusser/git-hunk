@@ -162,8 +162,8 @@ func verifyValidPatch(t *testing.T, data []byte) {
 	require.Contains(t, s, "@@")
 
 	// Line counts in hunk header should be valid.
-	lines := strings.Split(s, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(s, "\n")
+	for line := range lines {
 		if strings.HasPrefix(line, "@@") {
 			// Verify format: @@ -X,Y +X,Y @@
 			require.Contains(t, line, "-")

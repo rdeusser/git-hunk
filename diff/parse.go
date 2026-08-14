@@ -197,8 +197,8 @@ func convertHunk(h *godiff.Hunk) *Hunk {
 	oldLine := hunk.OldStart
 	newLine := hunk.NewStart
 
-	lines := bytes.Split(h.Body, []byte("\n"))
-	for _, data := range lines {
+	lines := bytes.SplitSeq(h.Body, []byte("\n"))
+	for data := range lines {
 		if len(data) == 0 {
 			continue
 		}
@@ -270,7 +270,7 @@ func annotateNoNewline(parsed *ParsedDiff, diffText string) {
 	inBody := false
 	var lastPrefix byte
 
-	for _, raw := range strings.Split(diffText, "\n") {
+	for raw := range strings.SplitSeq(diffText, "\n") {
 		switch {
 		case strings.HasPrefix(raw, "diff --git "):
 			fileIdx++

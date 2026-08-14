@@ -39,7 +39,7 @@ func ParseFileSelection(s string) (*FileSelection, error) {
 
 	var ranges []LineRange
 
-	for _, part := range strings.Split(rangeSpec, ",") {
+	for part := range strings.SplitSeq(rangeSpec, ",") {
 		r, err := parseRange(part)
 		if err != nil {
 			return nil, fmt.Errorf("invalid range %q in %q: %w", part, s, err)
