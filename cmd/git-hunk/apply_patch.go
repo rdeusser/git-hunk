@@ -24,7 +24,7 @@ Examples:
 }
 
 func (c *ApplyPatchCmd) Run(ctx context.Context, g *Globals) error {
-	input := g.In
+	r := g.In
 
 	if c.File != "" {
 		f, err := os.Open(c.File)
@@ -33,10 +33,10 @@ func (c *ApplyPatchCmd) Run(ctx context.Context, g *Globals) error {
 		}
 		defer f.Close()
 
-		input = f
+		r = f
 	}
 
-	if err := g.Git.ApplyPatch(ctx, input); err != nil {
+	if err := g.Git.ApplyPatch(ctx, r); err != nil {
 		return err
 	}
 

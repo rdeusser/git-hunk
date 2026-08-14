@@ -64,14 +64,14 @@ func writeFile(t *testing.T, dir, name, content string) {
 func runCLI(t *testing.T, argv ...string) (string, error) {
 	t.Helper()
 
-	var output bytes.Buffer
+	var buf bytes.Buffer
 
 	err := execute(
 		context.Background(), argv,
-		strings.NewReader(""), &output, &output,
+		strings.NewReader(""), &buf, &buf,
 	)
 
-	return output.String(), err
+	return buf.String(), err
 }
 
 func TestGrammar(t *testing.T) {
@@ -1027,19 +1027,19 @@ func TestStageRenameDoesNotClaimAnotherFilesPath(t *testing.T) {
 	dir, cleanup := setupTestRepo(t)
 	defer cleanup()
 
-	var original strings.Builder
+	var sb strings.Builder
 	for i := 1; i <= 20; i++ {
-		fmt.Fprintf(&original, "orig line %d\n", i)
+		fmt.Fprintf(&sb, "orig line %d\n", i)
 	}
 
-	writeFile(t, dir, "a.txt", original.String())
+	writeFile(t, dir, "a.txt", sb.String())
 	gitCmd(t, dir, "add", "-A")
 	gitCmd(t, dir, "commit", "-m", "initial")
 
 	// Move a.txt to c.txt with an edit, then put a different file back at
 	// the path a.txt just vacated.
 	moved := strings.Replace(
-		original.String(), "orig line 2\n", "RENAMED FILE EDIT\n", 1,
+		sb.String(), "orig line 2\n", "RENAMED FILE EDIT\n", 1,
 	)
 	require.NoError(t, os.Remove(filepath.Join(dir, "a.txt")))
 	writeFile(t, dir, "c.txt", moved)

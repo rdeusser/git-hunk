@@ -12,8 +12,7 @@ import (
 // StageCmd stages specific lines from the working directory.
 type StageCmd struct {
 	Selections []string `arg:"" name:"FILE:LINES" help:"Lines to stage."`
-
-	DryRun bool `help:"Show what would be staged without staging."`
+	DryRun     bool     `help:"Show what would be staged without staging."`
 }
 
 func (c *StageCmd) Help() string {
@@ -59,18 +58,18 @@ func (c *StageCmd) Run(ctx context.Context, g *Globals) error {
 		return err
 	}
 
-	patchBytes, err := patch.Generate(parsed, selections)
+	data, err := patch.Generate(parsed, selections)
 	if err != nil {
 		return err
 	}
 
 	if c.DryRun {
-		fmt.Fprint(g.Out, string(patchBytes))
+		fmt.Fprint(g.Out, string(data))
 
 		return nil
 	}
 
-	if err := g.Git.ApplyPatch(ctx, bytes.NewReader(patchBytes)); err != nil {
+	if err := g.Git.ApplyPatch(ctx, bytes.NewReader(data)); err != nil {
 		return fmt.Errorf("failed to stage changes: %w", err)
 	}
 

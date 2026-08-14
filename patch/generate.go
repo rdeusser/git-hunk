@@ -13,17 +13,30 @@ import (
 // the final line of its file side when that file has no trailing newline.
 const noNewlineMarker = "\\ No newline at end of file"
 
-// writeDiffLine writes one diff line to buf followed by a newline, then the
-// "\ No newline at end of file" marker when the line is a newline-less EOF
-// line. Re-emitting the marker keeps the patch consistent with the blob so
-// git apply does not reject it over a phantom trailing newline.
-func writeDiffLine(buf *bytes.Buffer, line diff.DiffLine) {
-	buf.WriteString(line.String())
-	buf.WriteByte('\n')
-	if line.NoNewline {
-		buf.WriteString(noNewlineMarker)
-		buf.WriteByte('\n')
-	}
+// maxContext is the number of anchor context lines emitted on each side of a
+// change block, matching git's default unified-diff context. It also bounds
+// how close two blocks may sit before their context windows overlap and they
+// must be coalesced into a single hunk (see coalesceBlocks).
+const maxContext = 3
+
+// changeBlock represents a contiguous group of selected changes within a hunk.
+// Indices refer to positions in the original hunk's Lines slice.
+type changeBlock struct {
+	startIdx int // Index where this block starts (inclusive).
+	endIdx   int // Index where this block ends (exclusive).
+}
+
+// lineRef describes a single line included in the output hunk. It pairs
+// an index into the original hunk's Lines slice with an optional override
+// that forces the emitted line to render as a context line regardless of
+// its original Op. The override is used for unselected deletions that fall
+// inside a coalesced block range or in the context-expansion path: they
+// exist in the old file at their recorded position and survive in the new
+// file after our partial patch applies, so the patch must describe them
+// as context lines to match the actual old-file shape.
+type lineRef struct {
+	idx       int  // Index into original.Lines.
+	asContext bool // If true, render with Op=OpContext.
 }
 
 // Generate creates a patch containing only the selected lines.
@@ -34,9 +47,7 @@ func writeDiffLine(buf *bytes.Buffer, line diff.DiffLine) {
 // dropped from it, so a caller that mistypes one of several selections is
 // told, instead of being handed a patch that silently stages less than it
 // asked for.
-func Generate(
-	parsed *diff.ParsedDiff, selections []*diff.FileSelection,
-) ([]byte, error) {
+func Generate(parsed *diff.ParsedDiff, selections []*diff.FileSelection) ([]byte, error) {
 	// Build a map for fast lookup.
 	selMap := diff.NewSelectionMap(selections)
 	claimed := claimedPaths(parsed)
@@ -82,12 +93,63 @@ func Generate(
 	return buf.Bytes(), nil
 }
 
+// GenerateForFile creates a patch for a single file with all its changes.
+func GenerateForFile(file *diff.FileDiff) []byte {
+	var buf bytes.Buffer
+
+	// Every hunk is included, so a deletion diff is always a full
+	// deletion here.
+	writeFullFileHeader(&buf, file, file.IsDeleted)
+
+	for _, hunk := range file.Hunks {
+		buf.WriteString(hunk.Header())
+		buf.WriteByte('\n')
+
+		for _, line := range hunk.Lines {
+			writeDiffLine(&buf, line)
+		}
+	}
+
+	return buf.Bytes()
+}
+
+// GenerateForHunk creates a patch for a single hunk.
+func GenerateForHunk(file *diff.FileDiff, hunk *diff.Hunk) []byte {
+	var buf bytes.Buffer
+
+	// This hunk covers the full deletion only if it's the file's one and
+	// only hunk; a deletion diff split across multiple hunks would leave
+	// the other hunks' deletions unstaged, and the file would survive.
+	fullDeletion := file.IsDeleted && len(file.Hunks) == 1
+	writeFullFileHeader(&buf, file, fullDeletion)
+
+	buf.WriteString(hunk.Header())
+	buf.WriteByte('\n')
+
+	for _, line := range hunk.Lines {
+		writeDiffLine(&buf, line)
+	}
+
+	return buf.Bytes()
+}
+
+// writeDiffLine writes one diff line to buf followed by a newline, then the
+// "\ No newline at end of file" marker when the line is a newline-less EOF
+// line. Re-emitting the marker keeps the patch consistent with the blob so
+// git apply does not reject it over a phantom trailing newline.
+func writeDiffLine(buf *bytes.Buffer, line diff.DiffLine) {
+	buf.WriteString(line.String())
+	buf.WriteByte('\n')
+	if line.NoNewline {
+		buf.WriteString(noNewlineMarker)
+		buf.WriteByte('\n')
+	}
+}
+
 // unmatchedSelections lists the selections that contributed no lines, in the
 // order the caller gave them. Duplicate paths report once, under the merged
 // ranges NewSelectionMap folded them into.
-func unmatchedSelections(
-	selections []*diff.FileSelection, matched map[string]bool,
-) []string {
+func unmatchedSelections(selections []*diff.FileSelection, matched map[string]bool) []string {
 	var unmatched []string
 
 	seen := make(map[string]bool)
@@ -111,9 +173,7 @@ func unmatchedSelections(
 // in the diff still holds that path — renaming a.txt away and creating a
 // new a.txt puts both files in reach of one "a.txt:N" selection, and the
 // patch would then stage lines the caller never named.
-func selectionFor(
-	selMap diff.SelectionMap, file *diff.FileDiff, claimed map[string]bool,
-) *diff.FileSelection {
+func selectionFor(selMap diff.SelectionMap, file *diff.FileDiff, claimed map[string]bool) *diff.FileSelection {
 	if sel := selMap.Get(file.Path()); sel != nil {
 		return sel
 	}
@@ -144,9 +204,7 @@ func claimedPaths(parsed *diff.ParsedDiff) map[string]bool {
 // content behind, which is a modification (the file survives under its
 // original name), not a deletion, and must target a real path on both sides
 // or git apply rejects the patch entirely.
-func writeFileHeader(
-	buf *bytes.Buffer, file *diff.FileDiff, sel *diff.FileSelection,
-) {
+func writeFileHeader(buf *bytes.Buffer, file *diff.FileDiff, sel *diff.FileSelection) {
 	writeExtendedHeader(buf, file)
 
 	switch {
@@ -238,32 +296,6 @@ func filterHunks(hunks []*diff.Hunk, sel *diff.FileSelection) []*diff.Hunk {
 	return result
 }
 
-// maxContext is the number of anchor context lines emitted on each side of a
-// change block, matching git's default unified-diff context. It also bounds
-// how close two blocks may sit before their context windows overlap and they
-// must be coalesced into a single hunk (see coalesceBlocks).
-const maxContext = 3
-
-// changeBlock represents a contiguous group of selected changes within a hunk.
-// Indices refer to positions in the original hunk's Lines slice.
-type changeBlock struct {
-	startIdx int // Index where this block starts (inclusive).
-	endIdx   int // Index where this block ends (exclusive).
-}
-
-// lineRef describes a single line included in the output hunk. It pairs
-// an index into the original hunk's Lines slice with an optional override
-// that forces the emitted line to render as a context line regardless of
-// its original Op. The override is used for unselected deletions that fall
-// inside a coalesced block range or in the context-expansion path: they
-// exist in the old file at their recorded position and survive in the new
-// file after our partial patch applies, so the patch must describe them
-// as context lines to match the actual old-file shape.
-type lineRef struct {
-	idx       int  // Index into original.Lines.
-	asContext bool // If true, render with Op=OpContext.
-}
-
 // filterHunk filters a single hunk based on selection. When non-contiguous
 // changes are selected, the hunk is split into multiple hunks, one for each
 // contiguous block of selected changes. Each resulting hunk is independently
@@ -324,9 +356,7 @@ func filterHunk(hunk *diff.Hunk, sel *diff.FileSelection) []*diff.Hunk {
 // mask to decide how to treat each line of the block range and the
 // context-expansion path: unselected additions are dropped, unselected
 // deletions are re-tagged as context, and selected lines render unchanged.
-func findChangeBlocks(hunk *diff.Hunk, sel *diff.FileSelection) (
-	[]changeBlock, []bool,
-) {
+func findChangeBlocks(hunk *diff.Hunk, sel *diff.FileSelection) ([]changeBlock, []bool) {
 	// Build a selected-line set that expands mixed change groups.
 	// A mixed group is a contiguous run of change lines containing
 	// both additions and deletions. When any member is selected,
@@ -490,9 +520,7 @@ func gapContextLines(hunk *diff.Hunk, start, end int) int {
 //
 // The walk still STOPS at selected change lines (which belong to other
 // blocks) and at context lines beyond the maxContext budget.
-func buildHunkFromBlock(
-	original *diff.Hunk, block changeBlock, selected []bool,
-) *diff.Hunk {
+func buildHunkFromBlock(original *diff.Hunk, block changeBlock, selected []bool) *diff.Hunk {
 	refs := collectHunkIndices(original, block, selected)
 	if len(refs) == 0 {
 		return nil
@@ -541,9 +569,7 @@ func buildHunkFromBlock(
 // captures unselected deletions as context lines (counted against the
 // context budget). It stops at selected change lines (those belong to
 // other blocks).
-func collectHunkIndices(
-	original *diff.Hunk, block changeBlock, selected []bool,
-) []lineRef {
+func collectHunkIndices(original *diff.Hunk, block changeBlock, selected []bool) []lineRef {
 	// Block lines: real context lines (rare inside a block in
 	// practice) and selected change lines render unchanged.
 	// Unselected ADDITIONS are dropped entirely (they live only in
@@ -589,9 +615,7 @@ func collectHunkIndices(
 // encounter (selected change line belonging to another block, end of
 // hunk) stops the walk. For backward walks the returned slice is in
 // ascending order so it can be prepended verbatim.
-func expandContext(
-	original *diff.Hunk, selected []bool, start, step, limit int,
-) []lineRef {
+func expandContext(original *diff.Hunk, selected []bool, start, step, limit int) []lineRef {
 	var out []lineRef
 	i := start
 	prepend := func(ref lineRef) {
@@ -689,9 +713,7 @@ func effectiveLineNum(line diff.DiffLine) int {
 // line of the file (GenerateForFile) or the file's one and only hunk
 // (GenerateForHunk on a single-hunk deletion diff), so there is no partial
 // selection to reason about — fullDeletion is computed once by the caller.
-func writeFullFileHeader(
-	buf *bytes.Buffer, file *diff.FileDiff, fullDeletion bool,
-) {
+func writeFullFileHeader(buf *bytes.Buffer, file *diff.FileDiff, fullDeletion bool) {
 	writeExtendedHeader(buf, file)
 
 	switch {
@@ -712,44 +734,4 @@ func writeFullFileHeader(
 		fmt.Fprintf(buf, "--- a/%s\n", file.OldName)
 		fmt.Fprintf(buf, "+++ b/%s\n", file.NewName)
 	}
-}
-
-// GenerateForFile creates a patch for a single file with all its changes.
-func GenerateForFile(file *diff.FileDiff) []byte {
-	var buf bytes.Buffer
-
-	// Every hunk is included, so a deletion diff is always a full
-	// deletion here.
-	writeFullFileHeader(&buf, file, file.IsDeleted)
-
-	for _, hunk := range file.Hunks {
-		buf.WriteString(hunk.Header())
-		buf.WriteByte('\n')
-
-		for _, line := range hunk.Lines {
-			writeDiffLine(&buf, line)
-		}
-	}
-
-	return buf.Bytes()
-}
-
-// GenerateForHunk creates a patch for a single hunk.
-func GenerateForHunk(file *diff.FileDiff, hunk *diff.Hunk) []byte {
-	var buf bytes.Buffer
-
-	// This hunk covers the full deletion only if it's the file's one and
-	// only hunk; a deletion diff split across multiple hunks would leave
-	// the other hunks' deletions unstaged, and the file would survive.
-	fullDeletion := file.IsDeleted && len(file.Hunks) == 1
-	writeFullFileHeader(&buf, file, fullDeletion)
-
-	buf.WriteString(hunk.Header())
-	buf.WriteByte('\n')
-
-	for _, line := range hunk.Lines {
-		writeDiffLine(&buf, line)
-	}
-
-	return buf.Bytes()
 }

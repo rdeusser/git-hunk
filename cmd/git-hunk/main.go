@@ -43,9 +43,8 @@ Examples:
 // CLI is the command grammar. Kong derives every command name, flag, and
 // help string from the tags below.
 type CLI struct {
-	Dir  string `short:"C" placeholder:"PATH" help:"Run as if git was started in this directory."`
-	JSON bool   `help:"Output in JSON format (for machine consumption)."`
-
+	Dir        string        `short:"C" placeholder:"PATH" help:"Run as if git was started in this directory."`
+	JSON       bool          `help:"Output in JSON format (for machine consumption)."`
 	Diff       DiffCmd       `cmd:"" help:"Show changes with line numbers."`
 	Stage      StageCmd      `cmd:"" help:"Stage specific lines."`
 	Preview    PreviewCmd    `cmd:"" help:"Show staged changes."`
@@ -64,9 +63,7 @@ type Globals struct {
 	JSON bool
 }
 
-func main() {
-	os.Exit(run())
-}
+func main() { os.Exit(run()) }
 
 // run binds the process to the CLI and reports its exit status. The signal
 // context lives here rather than in main so that its teardown can be
@@ -77,10 +74,10 @@ func main() {
 // .git/index.lock on its way out; killing it outright would strand the
 // lock and wedge the repository.
 func run() int {
-	ctx, stop := signal.NotifyContext(
+	ctx, cancel := signal.NotifyContext(
 		context.Background(), os.Interrupt, syscall.SIGTERM,
 	)
-	defer stop()
+	defer cancel()
 
 	err := execute(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 	if err != nil {
@@ -97,10 +94,7 @@ func run() int {
 // Usage is deliberately never printed alongside an error: a wall of help text
 // buried real failures such as "patch does not apply", and callers piping our
 // output want a clean error line.
-func execute(
-	ctx context.Context, argv []string,
-	in io.Reader, out, errOut io.Writer,
-) error {
+func execute(ctx context.Context, argv []string, r io.Reader, out, errOut io.Writer) error {
 	var cli CLI
 
 	parser := newParser(ctx, &cli, out, errOut)
@@ -114,7 +108,7 @@ func execute(
 
 	err = kctx.Run(&Globals{
 		Git:  git.NewShellExecutor(cli.Dir),
-		In:   in,
+		In:   r,
 		Out:  out,
 		JSON: cli.JSON,
 	})
@@ -127,9 +121,7 @@ func execute(
 
 // newParser builds the command grammar. The writers receive kong's own help
 // and error output; a running command writes to Globals.Out instead.
-func newParser(
-	ctx context.Context, cli *CLI, out, errOut io.Writer,
-) *kong.Kong {
+func newParser(ctx context.Context, cli *CLI, out, errOut io.Writer) *kong.Kong {
 	return kong.Must(cli,
 		kong.Name("git-hunk"),
 		kong.Description(description),

@@ -2,10 +2,19 @@ package diff
 
 import "iter"
 
+// FindFirst returns the first line matching the predicate.
+func FindFirst(lines iter.Seq[DiffLine], pred func(DiffLine) bool) (DiffLine, bool) {
+	for line := range lines {
+		if pred(line) {
+			return line, true
+		}
+	}
+
+	return DiffLine{}, false
+}
+
 // FilteredLines returns an iterator over lines matching a predicate.
-func FilteredLines(
-	lines iter.Seq[DiffLine], pred func(DiffLine) bool,
-) iter.Seq[DiffLine] {
+func FilteredLines(lines iter.Seq[DiffLine], pred func(DiffLine) bool) iter.Seq[DiffLine] {
 	return func(yield func(DiffLine) bool) {
 		for line := range lines {
 			if pred(line) {
@@ -18,9 +27,7 @@ func FilteredLines(
 }
 
 // MapLines transforms lines using a mapping function.
-func MapLines[T any](
-	lines iter.Seq[DiffLine], fn func(DiffLine) T,
-) iter.Seq[T] {
+func MapLines[T any](lines iter.Seq[DiffLine], fn func(DiffLine) T) iter.Seq[T] {
 	return func(yield func(T) bool) {
 		for line := range lines {
 			if !yield(fn(line)) {
@@ -145,9 +152,7 @@ func LinesInRange(lines iter.Seq[DiffLine], start, end int) iter.Seq[DiffLine] {
 }
 
 // SelectedLines returns lines matching any of the selections.
-func SelectedLines(
-	lines iter.Seq[DiffLine], sel *FileSelection,
-) iter.Seq[DiffLine] {
+func SelectedLines(lines iter.Seq[DiffLine], sel *FileSelection) iter.Seq[DiffLine] {
 	return FilteredLines(lines, func(line DiffLine) bool {
 		// For deletions, check OldLineNum.
 		if line.Op == OpDelete {
@@ -186,17 +191,4 @@ func All(lines iter.Seq[DiffLine], pred func(DiffLine) bool) bool {
 	}
 
 	return true
-}
-
-// FindFirst returns the first line matching the predicate.
-func FindFirst(
-	lines iter.Seq[DiffLine], pred func(DiffLine) bool,
-) (DiffLine, bool) {
-	for line := range lines {
-		if pred(line) {
-			return line, true
-		}
-	}
-
-	return DiffLine{}, false
 }

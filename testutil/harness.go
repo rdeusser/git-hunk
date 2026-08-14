@@ -11,9 +11,72 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// ComparisonTest represents a comparison between two git operations.
+// Used to verify hunk produces identical results to manual git operations.
+type ComparisonTest struct {
+	t *testing.T
+
+	Expected *GitTestRepo
+	Actual   *GitTestRepo
+}
+
+// NewComparisonTest creates two identical repos for comparison testing.
+// The setup function is called on both repos to establish identical state.
+func NewComparisonTest(t *testing.T, setup func(r *GitTestRepo)) *ComparisonTest {
+	t.Helper()
+
+	expected := NewGitTestRepo(t)
+	actual := NewGitTestRepo(t)
+
+	setup(expected)
+	setup(actual)
+
+	return &ComparisonTest{
+		t:        t,
+		Expected: expected,
+		Actual:   actual,
+	}
+}
+
+// AssertSameContent verifies both repos have identical file contents.
+func (c *ComparisonTest) AssertSameContent(paths ...string) {
+	c.t.Helper()
+
+	for _, path := range paths {
+		exp := c.Expected.ReadFile(path)
+		act := c.Actual.ReadFile(path)
+
+		require.Equal(c.t, exp, act,
+			"file %s differs between expected and actual", path)
+	}
+}
+
+// AssertSameDiff verifies both repos have identical staged diffs.
+func (c *ComparisonTest) AssertSameDiff() {
+	c.t.Helper()
+
+	expDiff := c.Expected.DiffCached()
+	actDiff := c.Actual.DiffCached()
+
+	require.Equal(c.t, expDiff, actDiff,
+		"staged diffs differ between expected and actual")
+}
+
+// AssertSameUnstagedDiff verifies both repos have identical unstaged diffs.
+func (c *ComparisonTest) AssertSameUnstagedDiff() {
+	c.t.Helper()
+
+	expDiff := c.Expected.Diff()
+	actDiff := c.Actual.Diff()
+
+	require.Equal(c.t, expDiff, actDiff,
+		"unstaged diffs differ between expected and actual")
+}
+
 // GitTestRepo creates a temporary git repository for testing.
 type GitTestRepo struct {
-	t   *testing.T
+	t *testing.T
+
 	Dir string
 }
 
@@ -34,10 +97,6 @@ func NewGitTestRepo(t *testing.T) *GitTestRepo {
 	repo.Git("config", "user.name", "Test User")
 
 	return repo
-}
-
-func (r *GitTestRepo) cleanup() {
-	os.RemoveAll(r.Dir)
 }
 
 // Git runs a git command in the test repo.
@@ -127,69 +186,6 @@ func (r *GitTestRepo) DiffCached() string {
 	return r.Git("diff", "--cached", "--no-color")
 }
 
-// ComparisonTest represents a comparison between two git operations.
-// Used to verify hunk produces identical results to manual git operations.
-type ComparisonTest struct {
-	t        *testing.T
-	Expected *GitTestRepo
-	Actual   *GitTestRepo
-}
-
-// NewComparisonTest creates two identical repos for comparison testing.
-// The setup function is called on both repos to establish identical state.
-func NewComparisonTest(
-	t *testing.T, setup func(r *GitTestRepo),
-) *ComparisonTest {
-	t.Helper()
-
-	expected := NewGitTestRepo(t)
-	actual := NewGitTestRepo(t)
-
-	setup(expected)
-	setup(actual)
-
-	return &ComparisonTest{
-		t:        t,
-		Expected: expected,
-		Actual:   actual,
-	}
-}
-
-// AssertSameContent verifies both repos have identical file contents.
-func (c *ComparisonTest) AssertSameContent(paths ...string) {
-	c.t.Helper()
-
-	for _, path := range paths {
-		exp := c.Expected.ReadFile(path)
-		act := c.Actual.ReadFile(path)
-
-		require.Equal(c.t, exp, act,
-			"file %s differs between expected and actual", path)
-	}
-}
-
-// AssertSameDiff verifies both repos have identical staged diffs.
-func (c *ComparisonTest) AssertSameDiff() {
-	c.t.Helper()
-
-	expDiff := c.Expected.DiffCached()
-	actDiff := c.Actual.DiffCached()
-
-	require.Equal(c.t, expDiff, actDiff,
-		"staged diffs differ between expected and actual")
-}
-
-// AssertSameUnstagedDiff verifies both repos have identical unstaged diffs.
-func (c *ComparisonTest) AssertSameUnstagedDiff() {
-	c.t.Helper()
-
-	expDiff := c.Expected.Diff()
-	actDiff := c.Actual.Diff()
-
-	require.Equal(c.t, expDiff, actDiff,
-		"unstaged diffs differ between expected and actual")
-}
-
 // CreateBranch creates and switches to a new branch.
 func (r *GitTestRepo) CreateBranch(name string) {
 	r.t.Helper()
@@ -256,3 +252,5 @@ func (r *GitTestRepo) GetFullHash() string {
 
 	return out
 }
+
+func (r *GitTestRepo) cleanup() { os.RemoveAll(r.Dir) }

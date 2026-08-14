@@ -124,21 +124,21 @@ func TestProperty_PureAddSubrangeIsAlwaysAnchored(t *testing.T) {
 		)
 		require.NoError(rt, err)
 
-		patchBytes, err := patch.Generate(
+		data, err := patch.Generate(
 			parsed, []*diff.FileSelection{sel},
 		)
 		require.NoError(rt, err)
-		require.NotEmpty(rt, patchBytes,
+		require.NotEmpty(rt, data,
 			"non-empty selection must produce non-empty patch")
 
 		// Apply via real git to surface anchor failures. The patch
 		// MUST apply cleanly; "patch does not apply" or silent fuzz
 		// onto EOF are both bug signatures.
-		if err := applyCached(repoDir, patchBytes); err != nil {
+		if err := applyCached(repoDir, data); err != nil {
 			rt.Fatalf(
 				"git apply --cached rejected patch: %v\n"+
 					"Patch:\n%s",
-				err, patchBytes,
+				err, data,
 			)
 		}
 
@@ -153,7 +153,7 @@ func TestProperty_PureAddSubrangeIsAlwaysAnchored(t *testing.T) {
 		got := readStagedFile(rt, repoDir, "test.go")
 		require.Equal(rt, strings.Join(expected, "\n")+"\n", got,
 			"staged file content mismatch.\nPatch:\n%s",
-			patchBytes,
+			data,
 		)
 	})
 }
@@ -250,17 +250,17 @@ func TestProperty_PureDeleteSubrangeIsAlwaysAnchored(t *testing.T) {
 		)
 		require.NoError(rt, err)
 
-		patchBytes, err := patch.Generate(
+		data, err := patch.Generate(
 			parsed, []*diff.FileSelection{sel},
 		)
 		require.NoError(rt, err)
-		require.NotEmpty(rt, patchBytes)
+		require.NotEmpty(rt, data)
 
-		if err := applyCached(repoDir, patchBytes); err != nil {
+		if err := applyCached(repoDir, data); err != nil {
 			rt.Fatalf(
 				"git apply --cached rejected patch: %v\n"+
 					"Patch:\n%s",
-				err, patchBytes,
+				err, data,
 			)
 		}
 
@@ -280,7 +280,7 @@ func TestProperty_PureDeleteSubrangeIsAlwaysAnchored(t *testing.T) {
 		got := readStagedFile(rt, repoDir, "test.go")
 		require.Equal(rt, strings.Join(expected, "\n")+"\n", got,
 			"staged file content mismatch.\nPatch:\n%s",
-			patchBytes,
+			data,
 		)
 	})
 }
@@ -298,21 +298,21 @@ func TestProperty_PatchHunksAlwaysAnchored(t *testing.T) {
 		// Generate a diff with N pure-add lines wedged inside a
 		// fixed-shape context block.
 		numAdds := rapid.IntRange(1, 8).Draw(rt, "numAdds")
-		var diffBuf strings.Builder
-		diffBuf.WriteString("--- a/f.go\n")
-		diffBuf.WriteString("+++ b/f.go\n")
+		var sb strings.Builder
+		sb.WriteString("--- a/f.go\n")
+		sb.WriteString("+++ b/f.go\n")
 		fmt.Fprintf(
-			&diffBuf, "@@ -1,4 +1,%d @@\n", 4+numAdds,
+			&sb, "@@ -1,4 +1,%d @@\n", 4+numAdds,
 		)
-		diffBuf.WriteString(" line1\n")
-		diffBuf.WriteString(" line2\n")
-		diffBuf.WriteString(" line3\n")
+		sb.WriteString(" line1\n")
+		sb.WriteString(" line2\n")
+		sb.WriteString(" line3\n")
 		for i := range numAdds {
-			fmt.Fprintf(&diffBuf, "+add%d\n", i)
+			fmt.Fprintf(&sb, "+add%d\n", i)
 		}
-		diffBuf.WriteString(" line4\n")
+		sb.WriteString(" line4\n")
 
-		parsed, err := diff.Parse(diffBuf.String())
+		parsed, err := diff.Parse(sb.String())
 		require.NoError(rt, err)
 
 		// Pick a random non-empty subset of new-file line numbers
@@ -571,24 +571,24 @@ func TestProperty_MultiGroupSelectionAlwaysApplies(t *testing.T) {
 		)
 		require.NoError(rt, err)
 
-		patchBytes, err := patch.Generate(
+		data, err := patch.Generate(
 			parsed, []*diff.FileSelection{sel},
 		)
 		require.NoError(rt, err)
-		require.NotEmpty(rt, patchBytes)
+		require.NotEmpty(rt, data)
 
-		if err := applyCached(repoDir, patchBytes); err != nil {
+		if err := applyCached(repoDir, data); err != nil {
 			rt.Fatalf(
 				"git apply --cached rejected patch: %v\n"+
 					"Patch:\n%s",
-				err, patchBytes,
+				err, data,
 			)
 		}
 
 		got := readStagedFile(rt, repoDir, "test.go")
 		require.Equal(
 			rt, strings.Join(expected, "\n")+"\n", got,
-			"staged index mismatch.\nPatch:\n%s", patchBytes,
+			"staged index mismatch.\nPatch:\n%s", data,
 		)
 	})
 }
@@ -613,9 +613,7 @@ func TestProperty_MultiGroupSelectionAlwaysApplies(t *testing.T) {
 // The generator deliberately mixes deletions and insertions at varying
 // densities so replacement groups, pure-add runs, pure-delete runs, and
 // tightly-spaced groups (which stress context coalescing) all arise.
-func TestProperty_ArbitraryStageAlwaysApplies(t *testing.T) {
-	rapid.Check(t, arbitraryStageProperty)
-}
+func TestProperty_ArbitraryStageAlwaysApplies(t *testing.T) { rapid.Check(t, arbitraryStageProperty) }
 
 // FuzzStageArbitrary exposes the arbitrary-stage property as a Go native fuzz
 // target via rapid.MakeFuzz, so `go test -fuzz=FuzzStageArbitrary` drives the
@@ -623,9 +621,7 @@ func TestProperty_ArbitraryStageAlwaysApplies(t *testing.T) {
 // failing corpus entry under testdata/fuzz. It shares its body with
 // TestProperty_ArbitraryStageAlwaysApplies so both entry points hunt the same
 // invariants.
-func FuzzStageArbitrary(f *testing.F) {
-	f.Fuzz(rapid.MakeFuzz(arbitraryStageProperty))
-}
+func FuzzStageArbitrary(f *testing.F) { f.Fuzz(rapid.MakeFuzz(arbitraryStageProperty)) }
 
 // arbitraryStageProperty is the shared body driven by both the rapid.Check
 // property and the native fuzz target. See TestProperty_ArbitraryStageAlwaysApplies
@@ -800,17 +796,17 @@ func deletedFileStageProperty(rt *rapid.T) {
 		)
 		require.NoError(rt, err)
 
-		patchBytes, err := patch.Generate(
+		data, err := patch.Generate(
 			parsed, []*diff.FileSelection{sel},
 		)
 		require.NoError(rt, err)
-		require.NotEmpty(rt, patchBytes)
+		require.NotEmpty(rt, data)
 
-		if err := applyCached(repoDir, patchBytes); err != nil {
+		if err := applyCached(repoDir, data); err != nil {
 			rt.Fatalf(
 				"git apply --cached rejected patch: %v\n"+
 					"Patch:\n%s",
-				err, patchBytes,
+				err, data,
 			)
 		}
 
@@ -821,7 +817,7 @@ func deletedFileStageProperty(rt *rapid.T) {
 			require.Error(
 				rt, err,
 				"expected del.txt removed from the index.\n"+
-					"Patch:\n%s", patchBytes,
+					"Patch:\n%s", data,
 			)
 			return
 		}
@@ -835,7 +831,7 @@ func deletedFileStageProperty(rt *rapid.T) {
 		got := readStagedFile(rt, repoDir, "del.txt")
 		require.Equal(
 			rt, strings.Join(expected, "\n")+"\n", got,
-			"partial deletion mismatch.\nPatch:\n%s", patchBytes,
+			"partial deletion mismatch.\nPatch:\n%s", data,
 		)
 	}
 }
@@ -846,9 +842,7 @@ func deletedFileStageProperty(rt *rapid.T) {
 // untracked file), then stages a random non-empty subset of its lines.
 // Every generated patch must apply, and the resulting index must contain
 // exactly the selected lines in their original order.
-func TestProperty_NewFileStageAlwaysApplies(t *testing.T) {
-	rapid.Check(t, newFileStageProperty)
-}
+func TestProperty_NewFileStageAlwaysApplies(t *testing.T) { rapid.Check(t, newFileStageProperty) }
 
 // newFileStageProperty is the shared body driven by both the rapid.Check
 // property and the native fuzz target. See
@@ -906,17 +900,17 @@ func newFileStageProperty(rt *rapid.T) {
 		)
 		require.NoError(rt, err)
 
-		patchBytes, err := patch.Generate(
+		data, err := patch.Generate(
 			parsed, []*diff.FileSelection{sel},
 		)
 		require.NoError(rt, err)
-		require.NotEmpty(rt, patchBytes)
+		require.NotEmpty(rt, data)
 
-		if err := applyCached(repoDir, patchBytes); err != nil {
+		if err := applyCached(repoDir, data); err != nil {
 			rt.Fatalf(
 				"git apply --cached rejected patch: %v\n"+
 					"Patch:\n%s",
-				err, patchBytes,
+				err, data,
 			)
 		}
 
@@ -924,22 +918,18 @@ func newFileStageProperty(rt *rapid.T) {
 		require.Equal(
 			rt, strings.Join(expected, "\n")+"\n", got,
 			"staged new-file content mismatch.\nPatch:\n%s",
-			patchBytes,
+			data,
 		)
 	}
 }
 
 // FuzzStageDeletedFile exposes TestProperty_DeletedFileStageAlwaysApplies as
 // a Go native fuzz target via rapid.MakeFuzz.
-func FuzzStageDeletedFile(f *testing.F) {
-	f.Fuzz(rapid.MakeFuzz(deletedFileStageProperty))
-}
+func FuzzStageDeletedFile(f *testing.F) { f.Fuzz(rapid.MakeFuzz(deletedFileStageProperty)) }
 
 // FuzzStageNewFile exposes TestProperty_NewFileStageAlwaysApplies as a Go
 // native fuzz target via rapid.MakeFuzz.
-func FuzzStageNewFile(f *testing.F) {
-	f.Fuzz(rapid.MakeFuzz(newFileStageProperty))
-}
+func FuzzStageNewFile(f *testing.F) { f.Fuzz(rapid.MakeFuzz(newFileStageProperty)) }
 
 // joinContent renders file lines as bytes, appending a trailing newline only
 // when trailingNL is set and the file is non-empty. This lets a property
@@ -959,10 +949,7 @@ func joinContent(lines []string, trailingNL bool) string {
 // via `git apply --cached`, and — when wantContent is non-nil — asserts the
 // resulting index equals it byte for byte. It fails the property with the
 // offending patch on any rejection or mismatch.
-func applySelection(
-	t *rapid.T, repoDir string, parsed *diff.ParsedDiff,
-	nums []int, wantContent *string,
-) {
+func applySelection(t *rapid.T, repoDir string, parsed *diff.ParsedDiff, nums []int, wantContent *string) {
 	t.Helper()
 
 	var parts []string
@@ -974,14 +961,14 @@ func applySelection(
 	)
 	require.NoError(t, err)
 
-	patchBytes, err := patch.Generate(parsed, []*diff.FileSelection{sel})
+	data, err := patch.Generate(parsed, []*diff.FileSelection{sel})
 	require.NoError(t, err)
-	require.NotEmpty(t, patchBytes)
+	require.NotEmpty(t, data)
 
-	if err := applyCached(repoDir, patchBytes); err != nil {
+	if err := applyCached(repoDir, data); err != nil {
 		t.Fatalf(
 			"git apply --cached rejected patch: %v\nPatch:\n%s",
-			err, patchBytes,
+			err, data,
 		)
 	}
 
@@ -990,7 +977,7 @@ func applySelection(
 		require.Equal(
 			t, *wantContent, got,
 			"full selection must reproduce the modified file.\n"+
-				"Patch:\n%s", patchBytes,
+				"Patch:\n%s", data,
 		)
 	}
 }

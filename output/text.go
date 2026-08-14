@@ -41,9 +41,7 @@ func DefaultTextOptions() TextOptions {
 }
 
 // FormatText writes the parsed diff as formatted text.
-func FormatText(
-	w io.Writer, parsed *diff.ParsedDiff, opts TextOptions,
-) error {
+func FormatText(w io.Writer, parsed *diff.ParsedDiff, opts TextOptions) error {
 	for file := range parsed.Files() {
 		if err := formatFile(w, file, opts); err != nil {
 			return err
@@ -56,93 +54,6 @@ func FormatText(
 	}
 
 	return nil
-}
-
-func formatFile(w io.Writer, file *diff.FileDiff, opts TextOptions) error {
-	// File header.
-	header := file.Path()
-	if file.IsRenamed {
-		header = fmt.Sprintf("%s -> %s", file.OldName, file.NewName)
-	}
-
-	if opts.Color {
-		fmt.Fprintf(w, "%s%s%s\n", colorCyan, header, colorReset)
-	} else {
-		fmt.Fprintln(w, header)
-	}
-
-	if file.IsBinary {
-		fmt.Fprintln(w, "Binary file")
-
-		return nil
-	}
-
-	for i, hunk := range file.Hunks {
-		if i > 0 {
-			fmt.Fprintln(w)
-		}
-
-		if err := formatHunk(w, hunk, opts); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func formatHunk(w io.Writer, hunk *diff.Hunk, opts TextOptions) error {
-	// Hunk header.
-	header := hunk.Header()
-	if opts.Color {
-		fmt.Fprintf(w, "%s%s%s\n", colorBlue, header, colorReset)
-	} else {
-		fmt.Fprintln(w, header)
-	}
-
-	for _, line := range hunk.Lines {
-		if err := formatLine(w, line, opts); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func formatLine(w io.Writer, line diff.DiffLine, opts TextOptions) error {
-	var prefix, color, reset string
-
-	if opts.Color {
-		reset = colorReset
-		switch line.Op {
-		case diff.OpAdd:
-			color = colorGreen
-		case diff.OpDelete:
-			color = colorRed
-		default:
-			color = colorDim
-		}
-	}
-
-	prefix = string(line.Op.Prefix())
-
-	if opts.LineNumbers {
-		oldNum := formatLineNum(line.OldLineNum)
-		newNum := formatLineNum(line.NewLineNum)
-		fmt.Fprintf(w, "%s%s %s %s%s%s\n",
-			color, oldNum, newNum, prefix, line.Content, reset)
-	} else {
-		fmt.Fprintf(w, "%s%s%s%s\n", color, prefix, line.Content, reset)
-	}
-
-	return nil
-}
-
-func formatLineNum(n int) string {
-	if n == 0 {
-		return "    "
-	}
-
-	return fmt.Sprintf("%4d", n)
 }
 
 // FormatTextSummary writes a brief summary of changes.
@@ -268,4 +179,91 @@ func FormatStagingCommands(w io.Writer, parsed *diff.ParsedDiff) error {
 	}
 
 	return nil
+}
+
+func formatFile(w io.Writer, file *diff.FileDiff, opts TextOptions) error {
+	// File header.
+	header := file.Path()
+	if file.IsRenamed {
+		header = fmt.Sprintf("%s -> %s", file.OldName, file.NewName)
+	}
+
+	if opts.Color {
+		fmt.Fprintf(w, "%s%s%s\n", colorCyan, header, colorReset)
+	} else {
+		fmt.Fprintln(w, header)
+	}
+
+	if file.IsBinary {
+		fmt.Fprintln(w, "Binary file")
+
+		return nil
+	}
+
+	for i, hunk := range file.Hunks {
+		if i > 0 {
+			fmt.Fprintln(w)
+		}
+
+		if err := formatHunk(w, hunk, opts); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func formatHunk(w io.Writer, hunk *diff.Hunk, opts TextOptions) error {
+	// Hunk header.
+	header := hunk.Header()
+	if opts.Color {
+		fmt.Fprintf(w, "%s%s%s\n", colorBlue, header, colorReset)
+	} else {
+		fmt.Fprintln(w, header)
+	}
+
+	for _, line := range hunk.Lines {
+		if err := formatLine(w, line, opts); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func formatLine(w io.Writer, line diff.DiffLine, opts TextOptions) error {
+	var prefix, color, reset string
+
+	if opts.Color {
+		reset = colorReset
+		switch line.Op {
+		case diff.OpAdd:
+			color = colorGreen
+		case diff.OpDelete:
+			color = colorRed
+		default:
+			color = colorDim
+		}
+	}
+
+	prefix = string(line.Op.Prefix())
+
+	if opts.LineNumbers {
+		oldNum := formatLineNum(line.OldLineNum)
+		newNum := formatLineNum(line.NewLineNum)
+		fmt.Fprintf(w, "%s%s %s %s%s%s\n",
+			color, oldNum, newNum, prefix, line.Content, reset)
+	} else {
+		fmt.Fprintf(w, "%s%s%s%s\n", color, prefix, line.Content, reset)
+	}
+
+	return nil
+}
+
+func formatLineNum(n int) string {
+	if n == 0 {
+		return "    "
+	}
+
+	return fmt.Sprintf("%4d", n)
 }

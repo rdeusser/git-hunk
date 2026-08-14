@@ -10,13 +10,12 @@ import (
 
 // DiffCmd shows unstaged (or staged) changes with line numbers.
 type DiffCmd struct {
-	Paths []string `arg:"" name:"file" optional:"" help:"Limit output to these files."`
-
-	Staged     bool `help:"Show staged changes instead of unstaged."`
-	Raw        bool `help:"Show raw unified diff."`
-	Files      bool `help:"Show only file names."`
-	Summary    bool `help:"Show summary statistics."`
-	StageHints bool `help:"Show suggested git-hunk stage commands."`
+	Paths      []string `arg:"" name:"file" optional:"" help:"Limit output to these files."`
+	Staged     bool     `help:"Show staged changes instead of unstaged."`
+	Raw        bool     `help:"Show raw unified diff."`
+	Files      bool     `help:"Show only file names."`
+	Summary    bool     `help:"Show summary statistics."`
+	StageHints bool     `help:"Show suggested git-hunk stage commands."`
 }
 
 func (c *DiffCmd) Help() string {

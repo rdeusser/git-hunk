@@ -92,24 +92,8 @@ func FormatJSONWithUntracked(w io.Writer, parsed *diff.ParsedDiff, untracked []s
 	return enc.Encode(output)
 }
 
-// fileStatus returns the status string for a file.
-func fileStatus(f *diff.FileDiff) string {
-	switch {
-	case f.IsNew:
-		return "new"
-	case f.IsDeleted:
-		return "deleted"
-	case f.IsRenamed:
-		return "renamed"
-	default:
-		return "modified"
-	}
-}
-
 // FormatJSONEmpty writes an empty JSON response.
-func FormatJSONEmpty(w io.Writer) error {
-	return FormatJSONEmptyWithUntracked(w, nil)
-}
+func FormatJSONEmpty(w io.Writer) error { return FormatJSONEmptyWithUntracked(w, nil) }
 
 // FormatJSONEmptyWithUntracked writes an empty JSON response with untracked files.
 func FormatJSONEmptyWithUntracked(w io.Writer, untracked []string) error {
@@ -122,4 +106,18 @@ func FormatJSONEmptyWithUntracked(w io.Writer, untracked []string) error {
 	enc.SetIndent("", "  ")
 
 	return enc.Encode(output)
+}
+
+// fileStatus returns the status string for a file.
+func fileStatus(f *diff.FileDiff) string {
+	switch {
+	case f.IsNew:
+		return "new"
+	case f.IsDeleted:
+		return "deleted"
+	case f.IsRenamed:
+		return "renamed"
+	default:
+		return "modified"
+	}
 }

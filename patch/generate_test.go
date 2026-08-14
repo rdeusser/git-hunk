@@ -149,10 +149,10 @@ diff --git a/utils.go b/utils.go
 	}
 }
 
-func verifyValidPatch(t *testing.T, patchBytes []byte) {
+func verifyValidPatch(t *testing.T, data []byte) {
 	t.Helper()
 
-	s := string(patchBytes)
+	s := string(data)
 
 	// Should have file headers.
 	require.Contains(t, s, "--- a/")
@@ -824,13 +824,17 @@ func TestGenerate_PureAddSubrangeAnchoring(t *testing.T) {
 		name       string
 		diffText   string
 		selections []string
+
 		// wantContains is content that MUST appear in the patch.
 		wantContains []string
+
 		// wantAbsent is content that MUST NOT appear in the patch.
 		wantAbsent []string
+
 		// wantLeadCtx is the minimum number of leading context lines
 		// expected. 0 means no expectation (e.g., at file start).
 		wantLeadCtx int
+
 		// wantTrailCtx is the minimum number of trailing context lines.
 		wantTrailCtx int
 	}{
@@ -1010,6 +1014,7 @@ func TestGenerate_PureDeleteSubrangeAnchoring(t *testing.T) {
 		selections   []string
 		wantContains []string
 		wantAbsent   []string
+
 		// wantContextRuns lists the verbatim ` <line>` strings that
 		// should appear as context in the emitted patch. These are
 		// the unselected deletions re-tagged as context.

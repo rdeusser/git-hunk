@@ -126,15 +126,15 @@ func TestParseFileSelectionProperty(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		// Generate valid path.
 		pathParts := rapid.IntRange(1, 3).Draw(t, "pathParts")
-		var pathBuilder strings.Builder
+		var sb strings.Builder
 		for i := range pathParts {
 			if i > 0 {
-				pathBuilder.WriteString("/")
+				sb.WriteString("/")
 			}
-			pathBuilder.WriteString(rapid.StringMatching(`[a-z][a-z0-9_]*`).Draw(t, fmt.Sprintf("part%d", i)))
+			sb.WriteString(rapid.StringMatching(`[a-z][a-z0-9_]*`).Draw(t, fmt.Sprintf("part%d", i)))
 		}
-		pathBuilder.WriteString(".go")
-		path := pathBuilder.String()
+		sb.WriteString(".go")
+		path := sb.String()
 
 		// Generate valid ranges.
 		numRanges := rapid.IntRange(1, 5).Draw(t, "numRanges")

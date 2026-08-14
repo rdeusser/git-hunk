@@ -6,26 +6,6 @@ import (
 	"strings"
 )
 
-// LineRange represents a range of lines to select.
-type LineRange struct {
-	Start int // Inclusive.
-	End   int // Inclusive.
-}
-
-// Contains checks if a line number is within this range.
-func (r LineRange) Contains(lineNum int) bool {
-	return lineNum >= r.Start && lineNum <= r.End
-}
-
-// String returns the range as a string (e.g., "10-20" or "15").
-func (r LineRange) String() string {
-	if r.Start == r.End {
-		return strconv.Itoa(r.Start)
-	}
-
-	return fmt.Sprintf("%d-%d", r.Start, r.End)
-}
-
 // FileSelection represents selected lines for a file.
 type FileSelection struct {
 	Path   string
@@ -69,54 +49,6 @@ func ParseFileSelection(s string) (*FileSelection, error) {
 	}
 
 	return &FileSelection{Path: path, Ranges: ranges}, nil
-}
-
-// parseRange parses a single range like "10", "10-20".
-func parseRange(s string) (LineRange, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return LineRange{}, fmt.Errorf("empty range")
-	}
-
-	if strings.Contains(s, "-") {
-		parts := strings.SplitN(s, "-", 2)
-		if len(parts) != 2 {
-			return LineRange{}, fmt.Errorf("invalid range format")
-		}
-
-		start, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-		if err != nil {
-			return LineRange{}, fmt.Errorf("invalid start line: %w", err)
-		}
-
-		end, err := strconv.Atoi(strings.TrimSpace(parts[1]))
-		if err != nil {
-			return LineRange{}, fmt.Errorf("invalid end line: %w", err)
-		}
-
-		if start > end {
-			return LineRange{}, fmt.Errorf(
-				"start line %d greater than end line %d", start, end,
-			)
-		}
-
-		if start < 1 {
-			return LineRange{}, fmt.Errorf("line numbers must be positive")
-		}
-
-		return LineRange{Start: start, End: end}, nil
-	}
-
-	line, err := strconv.Atoi(s)
-	if err != nil {
-		return LineRange{}, fmt.Errorf("invalid line number: %w", err)
-	}
-
-	if line < 1 {
-		return LineRange{}, fmt.Errorf("line numbers must be positive")
-	}
-
-	return LineRange{Start: line, End: line}, nil
 }
 
 // Contains checks if a line number is within any of the ranges.
@@ -188,20 +120,70 @@ func (fs *FileSelection) Merge() {
 	fs.Ranges = merged
 }
 
-// ParseSelections parses multiple FILE:LINES arguments.
-func ParseSelections(args []string) ([]*FileSelection, error) {
-	selections := make([]*FileSelection, 0, len(args))
+// LineRange represents a range of lines to select.
+type LineRange struct {
+	Start int // Inclusive.
+	End   int // Inclusive.
+}
 
-	for _, arg := range args {
-		sel, err := ParseFileSelection(arg)
-		if err != nil {
-			return nil, err
-		}
-
-		selections = append(selections, sel)
+// parseRange parses a single range like "10", "10-20".
+func parseRange(s string) (LineRange, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return LineRange{}, fmt.Errorf("empty range")
 	}
 
-	return selections, nil
+	if strings.Contains(s, "-") {
+		parts := strings.SplitN(s, "-", 2)
+		if len(parts) != 2 {
+			return LineRange{}, fmt.Errorf("invalid range format")
+		}
+
+		start, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		if err != nil {
+			return LineRange{}, fmt.Errorf("invalid start line: %w", err)
+		}
+
+		end, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+		if err != nil {
+			return LineRange{}, fmt.Errorf("invalid end line: %w", err)
+		}
+
+		if start > end {
+			return LineRange{}, fmt.Errorf(
+				"start line %d greater than end line %d", start, end,
+			)
+		}
+
+		if start < 1 {
+			return LineRange{}, fmt.Errorf("line numbers must be positive")
+		}
+
+		return LineRange{Start: start, End: end}, nil
+	}
+
+	line, err := strconv.Atoi(s)
+	if err != nil {
+		return LineRange{}, fmt.Errorf("invalid line number: %w", err)
+	}
+
+	if line < 1 {
+		return LineRange{}, fmt.Errorf("line numbers must be positive")
+	}
+
+	return LineRange{Start: line, End: line}, nil
+}
+
+// Contains checks if a line number is within this range.
+func (r LineRange) Contains(lineNum int) bool { return lineNum >= r.Start && lineNum <= r.End }
+
+// String returns the range as a string (e.g., "10-20" or "15").
+func (r LineRange) String() string {
+	if r.Start == r.End {
+		return strconv.Itoa(r.Start)
+	}
+
+	return fmt.Sprintf("%d-%d", r.Start, r.End)
 }
 
 // SelectionMap groups selections by file path for efficient lookup.
@@ -225,9 +207,7 @@ func NewSelectionMap(selections []*FileSelection) SelectionMap {
 }
 
 // Get returns the selection for a file path, or nil if not found.
-func (m SelectionMap) Get(path string) *FileSelection {
-	return m[path]
-}
+func (m SelectionMap) Get(path string) *FileSelection { return m[path] }
 
 // Contains checks if a specific line in a file is selected.
 func (m SelectionMap) Contains(path string, lineNum int) bool {
@@ -237,4 +217,20 @@ func (m SelectionMap) Contains(path string, lineNum int) bool {
 	}
 
 	return sel.Contains(lineNum)
+}
+
+// ParseSelections parses multiple FILE:LINES arguments.
+func ParseSelections(args []string) ([]*FileSelection, error) {
+	selections := make([]*FileSelection, 0, len(args))
+
+	for _, arg := range args {
+		sel, err := ParseFileSelection(arg)
+		if err != nil {
+			return nil, err
+		}
+
+		selections = append(selections, sel)
+	}
+
+	return selections, nil
 }

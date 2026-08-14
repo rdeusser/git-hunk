@@ -25,80 +25,23 @@ type ShellExecutor struct {
 }
 
 // NewShellExecutor creates a new ShellExecutor.
-func NewShellExecutor(workDir string) *ShellExecutor {
-	return &ShellExecutor{WorkDir: workDir}
-}
-
-// run executes a git command and returns stdout.
-func (e *ShellExecutor) run(
-	ctx context.Context, stdin io.Reader, args ...string,
-) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
-	if e.WorkDir != "" {
-		cmd.Dir = e.WorkDir
-	}
-
-	// CommandContext cancels with SIGKILL, which git cannot handle. Killed
-	// between taking .git/index.lock and renaming it over the index, git
-	// leaves the lock behind and every later command in the repository
-	// fails until someone removes it by hand. SIGTERM runs git's own
-	// cleanup instead, and WaitDelay bounds how long that cleanup gets
-	// before Go escalates to SIGKILL anyway.
-	cmd.Cancel = func() error {
-		return cmd.Process.Signal(syscall.SIGTERM)
-	}
-	cmd.WaitDelay = terminateGrace
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Stdin = stdin
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf(
-			"git %s failed: %w: %s",
-			strings.Join(args, " "), err, stderr.String(),
-		)
-	}
-
-	return stdout.String(), nil
-}
+func NewShellExecutor(workDir string) *ShellExecutor { return &ShellExecutor{WorkDir: workDir} }
 
 // Diff returns the unified diff for unstaged changes.
-func (e *ShellExecutor) Diff(
-	ctx context.Context, paths ...string,
-) (string, error) {
+func (e *ShellExecutor) Diff(ctx context.Context, paths ...string) (string, error) {
 	return e.run(ctx, nil, pathArgs([]string{"diff", "--no-color"}, paths)...)
 }
 
 // DiffCached returns the unified diff for staged changes.
-func (e *ShellExecutor) DiffCached(
-	ctx context.Context, paths ...string,
-) (string, error) {
+func (e *ShellExecutor) DiffCached(ctx context.Context, paths ...string) (string, error) {
 	args := []string{"diff", "--cached", "--no-color"}
 
 	return e.run(ctx, nil, pathArgs(args, paths)...)
 }
 
-// pathArgs appends paths to args behind a "--" separator. Without it git
-// resolves each path as a revision first, so "diff main" fails outright in a
-// repository that has both a branch and a file called main, and a path that
-// only names a branch silently diffs against that branch instead.
-func pathArgs(args, paths []string) []string {
-	if len(paths) == 0 {
-		return args
-	}
-
-	args = append(args, "--")
-
-	return append(args, paths...)
-}
-
 // ApplyPatch applies a patch to the staging area.
-func (e *ShellExecutor) ApplyPatch(
-	ctx context.Context, patch io.Reader,
-) error {
-	_, err := e.run(ctx, patch, "apply", "--cached", "-")
+func (e *ShellExecutor) ApplyPatch(ctx context.Context, r io.Reader) error {
+	_, err := e.run(ctx, r, "apply", "--cached", "-")
 
 	return err
 }
@@ -119,9 +62,7 @@ func (e *ShellExecutor) Reset(ctx context.Context) error {
 
 // ResetPaths unstages changes for the given paths in one git invocation, so
 // a path git rejects leaves the index untouched rather than half-reset.
-func (e *ShellExecutor) ResetPaths(
-	ctx context.Context, paths ...string,
-) error {
+func (e *ShellExecutor) ResetPaths(ctx context.Context, paths ...string) error {
 	args := pathArgs([]string{"reset", "HEAD"}, paths)
 
 	_, err := e.run(ctx, nil, args...)
@@ -137,6 +78,51 @@ func (e *ShellExecutor) Status(ctx context.Context) (*RepoStatus, error) {
 	}
 
 	return parseStatus(output), nil
+}
+
+// run executes a git command and returns stdout.
+func (e *ShellExecutor) run(ctx context.Context, r io.Reader, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if e.WorkDir != "" {
+		cmd.Dir = e.WorkDir
+	}
+
+	// CommandContext cancels with SIGKILL, which git cannot handle. Killed
+	// between taking .git/index.lock and renaming it over the index, git
+	// leaves the lock behind and every later command in the repository
+	// fails until someone removes it by hand. SIGTERM runs git's own
+	// cleanup instead, and WaitDelay bounds how long that cleanup gets
+	// before Go escalates to SIGKILL anyway.
+	cmd.Cancel = func() error {
+		return cmd.Process.Signal(syscall.SIGTERM)
+	}
+	cmd.WaitDelay = terminateGrace
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Stdin = r
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf(
+			"git %s failed: %w: %s",
+			strings.Join(args, " "), err, stderr.String(),
+		)
+	}
+
+	return stdout.String(), nil
+}
+
+// RepoStatus represents the current state of the repository.
+type RepoStatus struct {
+	// StagedFiles lists files with staged changes.
+	StagedFiles []string
+
+	// UnstagedFiles lists files with unstaged changes.
+	UnstagedFiles []string
+
+	// UntrackedFiles lists untracked files.
+	UntrackedFiles []string
 }
 
 // parseStatus reads git's porcelain v1 -z output, whose entries are
@@ -183,18 +169,18 @@ func parseStatus(output string) *RepoStatus {
 	return status
 }
 
-func isRenameOrCopy(code byte) bool {
-	return code == 'R' || code == 'C'
+// pathArgs appends paths to args behind a "--" separator. Without it git
+// resolves each path as a revision first, so "diff main" fails outright in a
+// repository that has both a branch and a file called main, and a path that
+// only names a branch silently diffs against that branch instead.
+func pathArgs(args, paths []string) []string {
+	if len(paths) == 0 {
+		return args
+	}
+
+	args = append(args, "--")
+
+	return append(args, paths...)
 }
 
-// RepoStatus represents the current state of the repository.
-type RepoStatus struct {
-	// StagedFiles lists files with staged changes.
-	StagedFiles []string
-
-	// UnstagedFiles lists files with unstaged changes.
-	UnstagedFiles []string
-
-	// UntrackedFiles lists untracked files.
-	UntrackedFiles []string
-}
+func isRenameOrCopy(code byte) bool { return code == 'R' || code == 'C' }
