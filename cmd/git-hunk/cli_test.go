@@ -1,4 +1,4 @@
-package commands_test
+package main
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rdeusser/git-hunk/commands"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,7 +55,7 @@ func writeFile(t *testing.T, dir, name, content string) {
 }
 
 func TestNewRootCmd(t *testing.T) {
-	cmd := commands.NewRootCmd()
+	cmd := newRootCmd()
 	require.NotNil(t, cmd)
 	require.Equal(t, "git-hunk", cmd.Use)
 
@@ -79,7 +78,7 @@ func TestNewRootCmd(t *testing.T) {
 }
 
 func TestNewDiffCmd(t *testing.T) {
-	cmd := commands.NewDiffCmd()
+	cmd := newDiffCmd()
 	require.NotNil(t, cmd)
 	require.Equal(t, "diff [files...]", cmd.Use)
 	require.NotEmpty(t, cmd.Short)
@@ -88,32 +87,32 @@ func TestNewDiffCmd(t *testing.T) {
 }
 
 func TestNewStageCmd(t *testing.T) {
-	cmd := commands.NewStageCmd()
+	cmd := newStageCmd()
 	require.NotNil(t, cmd)
 	require.Equal(t, "stage FILE:LINES [FILE:LINES...]", cmd.Use)
 	require.NotEmpty(t, cmd.Short)
 }
 
 func TestNewPreviewCmd(t *testing.T) {
-	cmd := commands.NewPreviewCmd()
+	cmd := newPreviewCmd()
 	require.NotNil(t, cmd)
 	require.Equal(t, "preview", cmd.Use)
 }
 
 func TestNewCommitCmd(t *testing.T) {
-	cmd := commands.NewCommitCmd()
+	cmd := newCommitCmd()
 	require.NotNil(t, cmd)
 	require.Equal(t, "commit", cmd.Use)
 }
 
 func TestNewResetCmd(t *testing.T) {
-	cmd := commands.NewResetCmd()
+	cmd := newResetCmd()
 	require.NotNil(t, cmd)
 	require.Equal(t, "reset [files...]", cmd.Use)
 }
 
 func TestNewApplyPatchCmd(t *testing.T) {
-	cmd := commands.NewApplyPatchCmd()
+	cmd := newApplyPatchCmd()
 	require.NotNil(t, cmd)
 	require.Equal(t, "apply-patch [file]", cmd.Use)
 }
@@ -131,7 +130,7 @@ func TestDiffCommandExecution(t *testing.T) {
 	writeFile(t, dir, "main.go", "package main\n\n// Added.\nfunc main() {}\n")
 
 	// Create the command and run it.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "diff"})
 
 	var stdout bytes.Buffer
@@ -157,7 +156,7 @@ func TestDiffCommandJSON(t *testing.T) {
 	writeFile(t, dir, "main.go", "package main\n\n// Added.\nfunc main() {}\n")
 
 	// Run with JSON flag.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "--json", "diff"})
 
 	var stdout bytes.Buffer
@@ -179,7 +178,7 @@ func TestPreviewCommandEmpty(t *testing.T) {
 	gitCmd(t, dir, "add", "-A")
 	gitCmd(t, dir, "commit", "-m", "initial")
 
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "preview"})
 
 	var stdout bytes.Buffer
@@ -205,7 +204,7 @@ func TestResetCommand(t *testing.T) {
 	writeFile(t, dir, "main.go", "package main\n// changed\n")
 	gitCmd(t, dir, "add", "main.go")
 
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "reset"})
 
 	var stdout bytes.Buffer
@@ -226,7 +225,7 @@ func TestStageCommandInvalidSelection(t *testing.T) {
 	gitCmd(t, dir, "add", "-A")
 	gitCmd(t, dir, "commit", "-m", "initial")
 
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "stage", "invalid"})
 
 	err := rootCmd.Execute()
@@ -240,7 +239,7 @@ func TestCommitCommandNoMessage(t *testing.T) {
 	writeFile(t, dir, "main.go", "package main\n")
 	gitCmd(t, dir, "add", "-A")
 
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "commit"})
 
 	err := rootCmd.Execute()
@@ -249,7 +248,7 @@ func TestCommitCommandNoMessage(t *testing.T) {
 
 func TestConfigDefaults(t *testing.T) {
 	// Default config should have empty WorkDir and JSONOut false.
-	cfg := commands.Config{}
+	cfg := Config{}
 	require.Empty(t, cfg.WorkDir)
 	require.False(t, cfg.JSONOut)
 }
@@ -263,7 +262,7 @@ func TestDiffCommandNoChanges(t *testing.T) {
 	gitCmd(t, dir, "add", "-A")
 	gitCmd(t, dir, "commit", "-m", "initial")
 
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "diff"})
 
 	var stdout bytes.Buffer
@@ -283,7 +282,7 @@ func TestApplyPatchCommandNoFile(t *testing.T) {
 	gitCmd(t, dir, "commit", "-m", "initial")
 
 	// Try to apply non-existent file.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "apply-patch", "nonexistent.patch"})
 
 	err := rootCmd.Execute()
@@ -302,7 +301,7 @@ func TestDiffCommandStaged(t *testing.T) {
 	writeFile(t, dir, "main.go", "package main\n// staged\n")
 	gitCmd(t, dir, "add", "main.go")
 
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "diff", "--staged"})
 
 	var stdout bytes.Buffer
@@ -324,7 +323,7 @@ func TestStageCommandNoChanges(t *testing.T) {
 	gitCmd(t, dir, "commit", "-m", "initial")
 
 	// No unstaged changes.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "stage", "main.go:1-10"})
 
 	err := rootCmd.Execute()
@@ -340,7 +339,7 @@ func TestCommitCommandNothingStaged(t *testing.T) {
 	gitCmd(t, dir, "commit", "-m", "initial")
 
 	// Nothing staged.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "commit", "-m", "test"})
 
 	err := rootCmd.Execute()
@@ -357,7 +356,7 @@ func TestDiffCommandFlags(t *testing.T) {
 	writeFile(t, dir, "main.go", "package main\n// changed\n")
 
 	// Test --files flag - just verify it doesn't error.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "diff", "--files"})
 
 	err := rootCmd.Execute()
@@ -376,7 +375,7 @@ func TestPreviewCommandRaw(t *testing.T) {
 	writeFile(t, dir, "main.go", "package main\n// staged\n")
 	gitCmd(t, dir, "add", "main.go")
 
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "preview", "--raw"})
 
 	// Just verify no error.
@@ -393,7 +392,7 @@ func TestDiffCommandSummary(t *testing.T) {
 	gitCmd(t, dir, "commit", "-m", "initial")
 	writeFile(t, dir, "main.go", "package main\n// changed\n")
 
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "diff", "--summary"})
 
 	err := rootCmd.Execute()
@@ -409,7 +408,7 @@ func TestDiffCommandStageHints(t *testing.T) {
 	gitCmd(t, dir, "commit", "-m", "initial")
 	writeFile(t, dir, "main.go", "package main\n// changed\n")
 
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "diff", "--stage-hints"})
 
 	err := rootCmd.Execute()
@@ -425,7 +424,7 @@ func TestDiffCommandRaw(t *testing.T) {
 	gitCmd(t, dir, "commit", "-m", "initial")
 	writeFile(t, dir, "main.go", "package main\n// changed\n")
 
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "diff", "--raw"})
 
 	err := rootCmd.Execute()
@@ -469,7 +468,7 @@ func main() {}
 	// includes old lines 3-6 (deletions) and new lines 3-4 (additions).
 	// Without the atomic group fix, only the addition at line 3 would
 	// be staged, creating an invalid patch.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "stage", "main.go:3"})
 
 	var stdout bytes.Buffer
@@ -543,7 +542,7 @@ func main() {}
 	// Stage only section A changes (new line 4). This should pick up
 	// both the deletions (a1, a2) and the addition (newA) in hunk 1,
 	// but NOT the section B changes in hunk 2.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "stage", "main.go:4"})
 
 	var stdout bytes.Buffer
@@ -606,7 +605,7 @@ func bottom() {}
 
 	// New line 4 hits the first group; new line 8 hits the second. The
 	// selection spans the shared keepMid context line.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "stage", "main.go:4,8"})
 
 	var stdout bytes.Buffer
@@ -656,7 +655,7 @@ func TestStageNoNewlineAtEOF(t *testing.T) {
 	t.Run("stage insert above newline-less EOF", func(t *testing.T) {
 		defer gitCmd(t, dir, "reset", "-q")
 
-		rootCmd := commands.NewRootCmd()
+		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"--dir", dir, "stage", "main.go:2"})
 		rootCmd.SetOut(&bytes.Buffer{})
 		require.NoError(t, rootCmd.Execute())
@@ -670,7 +669,7 @@ func TestStageNoNewlineAtEOF(t *testing.T) {
 	t.Run("stage the newline-less replacement", func(t *testing.T) {
 		defer gitCmd(t, dir, "reset", "-q")
 
-		rootCmd := commands.NewRootCmd()
+		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"--dir", dir, "stage", "main.go:4"})
 		rootCmd.SetOut(&bytes.Buffer{})
 		require.NoError(t, rootCmd.Execute())
@@ -702,7 +701,7 @@ func TestStageDeletedFile(t *testing.T) {
 			gitCmd(t, dir, "checkout", "--", "del.txt")
 		}()
 
-		rootCmd := commands.NewRootCmd()
+		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"--dir", dir, "stage", "del.txt:1-4"})
 		rootCmd.SetOut(&bytes.Buffer{})
 		require.NoError(t, rootCmd.Execute())
@@ -718,7 +717,7 @@ func TestStageDeletedFile(t *testing.T) {
 			gitCmd(t, dir, "checkout", "--", "del.txt")
 		}()
 
-		rootCmd := commands.NewRootCmd()
+		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"--dir", dir, "stage", "del.txt:2"})
 		rootCmd.SetOut(&bytes.Buffer{})
 		require.NoError(t, rootCmd.Execute())
@@ -752,7 +751,7 @@ func TestStageNewFile(t *testing.T) {
 			)
 		}()
 
-		rootCmd := commands.NewRootCmd()
+		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"--dir", dir, "stage", "new.txt:2-3"})
 		rootCmd.SetOut(&bytes.Buffer{})
 		require.NoError(t, rootCmd.Execute())
@@ -772,7 +771,7 @@ func TestStageNewFile(t *testing.T) {
 			)
 		}()
 
-		rootCmd := commands.NewRootCmd()
+		rootCmd := newRootCmd()
 		rootCmd.SetArgs([]string{"--dir", dir, "stage", "new.txt:1-5"})
 		rootCmd.SetOut(&bytes.Buffer{})
 		require.NoError(t, rootCmd.Execute())
@@ -833,7 +832,7 @@ func Helper() {}
 	// shape of the original bug report. Without the fix this either
 	// errored out with "patch does not apply" or silently placed the
 	// fields after `func Helper()`.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "stage", "test.go:6-7"})
 
 	var stdout bytes.Buffer
@@ -891,7 +890,7 @@ func Helper() {}
 	// Skip Field3 and Field4 — stage only the first and last new
 	// fields. With the pre-fix code these were two separate blocks
 	// neither of which had complete anchor context.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "stage", "test.go:5,8"})
 
 	var stdout bytes.Buffer
@@ -969,7 +968,7 @@ func Helper() {}
 	// Stage only Field2 and Field4 (old lines 5 and 7), keeping Field3
 	// (old line 6) un-staged inside the group. This is the pure-delete
 	// analogue of TestStageNonContiguousAddsInSameGroup.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "stage", "test.go:5,7"})
 
 	var stdout bytes.Buffer
@@ -1025,7 +1024,7 @@ func Helper() {}
 	writeFile(t, dir, "test.go", modified)
 
 	// Stage only Field3 (old line 6) — the middle deletion.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs([]string{"--dir", dir, "stage", "test.go:6"})
 
 	var stdout bytes.Buffer
@@ -1070,7 +1069,7 @@ func TestStageErrorDoesNotPrintUsage(t *testing.T) {
 	writeFile(t, dir, "main.go", "package main\n// added\n")
 
 	// Select a line number with no matching change.
-	rootCmd := commands.NewRootCmd()
+	rootCmd := newRootCmd()
 	rootCmd.SetArgs(
 		[]string{"--dir", dir, "stage", "main.go:9999"},
 	)

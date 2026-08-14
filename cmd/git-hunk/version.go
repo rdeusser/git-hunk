@@ -1,4 +1,4 @@
-package commands
+package main
 
 import (
 	"fmt"
@@ -10,8 +10,8 @@ import (
 // Version is the current version of git-hunk.
 const Version = "v1.0.2"
 
-// NewVersionCmd creates the version command.
-func NewVersionCmd() *cobra.Command {
+// newVersionCmd creates the version command.
+func newVersionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print the version number",

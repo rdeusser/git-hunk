@@ -1,4 +1,4 @@
-package commands
+package main
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewPreviewCmd creates the preview command.
-func NewPreviewCmd() *cobra.Command {
+// newPreviewCmd creates the preview command.
+func newPreviewCmd() *cobra.Command {
 	var showRaw bool
 
 	cmd := &cobra.Command{

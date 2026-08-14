@@ -1,4 +1,4 @@
-package commands
+package main
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewDiffCmd creates the diff command.
-func NewDiffCmd() *cobra.Command {
+// newDiffCmd creates the diff command.
+func newDiffCmd() *cobra.Command {
 	var (
 		staged      bool
 		showRaw     bool

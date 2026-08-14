@@ -1,4 +1,4 @@
-package commands
+package main
 
 import (
 	"context"
@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewApplyPatchCmd creates the apply-patch command.
-func NewApplyPatchCmd() *cobra.Command {
+// newApplyPatchCmd creates the apply-patch command.
+func newApplyPatchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apply-patch [file]",
 		Short: "Apply a patch to the staging area",

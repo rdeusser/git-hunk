@@ -1,4 +1,4 @@
-package commands
+package main
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCommitCmd creates the commit command.
-func NewCommitCmd() *cobra.Command {
+// newCommitCmd creates the commit command.
+func newCommitCmd() *cobra.Command {
 	var message string
 
 	cmd := &cobra.Command{

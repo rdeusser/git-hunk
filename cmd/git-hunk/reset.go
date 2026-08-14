@@ -1,4 +1,4 @@
-package commands
+package main
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewResetCmd creates the reset command.
-func NewResetCmd() *cobra.Command {
+// newResetCmd creates the reset command.
+func newResetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reset [files...]",
 		Short: "Unstage changes",

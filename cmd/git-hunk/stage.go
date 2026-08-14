@@ -1,4 +1,4 @@
-package commands
+package main
 
 import (
 	"bytes"
@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewStageCmd creates the stage command.
-func NewStageCmd() *cobra.Command {
+// newStageCmd creates the stage command.
+func newStageCmd() *cobra.Command {
 	var dryRun bool
 
 	cmd := &cobra.Command{
