@@ -34,7 +34,7 @@ func NewRootCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "hunk",
+		Use:     "git-hunk",
 		Short:   "Sparse partial commits for AI agents",
 		Version: Version,
 		// Cobra prints the full usage block whenever a RunE returns
@@ -43,33 +43,33 @@ func NewRootCmd() *cobra.Command {
 		// Silence usage on errors so callers — including AI agents
 		// piping output — see a clean `Error: ...` line.
 		SilenceUsage: true,
-		Long: `Hunk enables precise, line-level staging for git commits.
+		Long: `git-hunk enables precise, line-level staging for git commits.
 
 Designed for AI agents that need to make surgical changes to codebases,
-hunk provides a simple interface for selecting and staging specific lines
+git-hunk provides a simple interface for selecting and staging specific lines
 from a diff.
 
 Examples:
   # Show all changes with line numbers
-  hunk diff
+  git-hunk diff
 
   # Show changes in JSON format (for agents)
-  hunk diff --json
+  git-hunk diff --json
 
   # Stage specific lines from a file
-  hunk stage main.go:10-20
+  git-hunk stage main.go:10-20
 
   # Stage multiple ranges from multiple files
-  hunk stage main.go:10-20,30-40 utils.go:5-15
+  git-hunk stage main.go:10-20,30-40 utils.go:5-15
 
   # Preview what's staged
-  hunk preview
+  git-hunk preview
 
   # Commit staged changes
-  hunk commit -m "add error handling"
+  git-hunk commit -m "add error handling"
 
   # Apply a patch directly to staging
-  hunk apply-patch < changes.diff`,
+  git-hunk apply-patch < changes.diff`,
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
 			// Store config in context for subcommands.
 			cfg := Config{

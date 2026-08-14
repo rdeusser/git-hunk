@@ -1,4 +1,4 @@
-# hunk
+# git-hunk
 
 Hunk is a command-line tool for making precise, line-level partial commits in git. It was designed specifically for AI coding agents that need to stage surgical changes to a codebase without committing unrelated modifications that happen to be in the same file.
 
@@ -13,15 +13,15 @@ This creates friction. Agents end up either committing too much (the whole file)
 Hunk lets you stage changes by specifying line numbers directly:
 
 ```bash
-hunk stage main.go:42-45
+git-hunk stage main.go:42-45
 ```
 
 That's it. Lines 42 through 45 from `main.go` are now staged, and nothing else. The remaining unstaged changes in the file stay exactly where they are.
 
-The line numbers refer to the **new file** (after your edits), which matches how editors display content and how agents think about their changes. You can see all available changes with line numbers using `hunk diff`:
+The line numbers refer to the **new file** (after your edits), which matches how editors display content and how agents think about their changes. You can see all available changes with line numbers using `git-hunk diff`:
 
 ```bash
-$ hunk diff
+$ git-hunk diff
 main.go
   10   func processRequest(r *Request) error {
   11 +     if r == nil {
@@ -33,14 +33,14 @@ main.go
 ## Installation
 
 ```bash
-go install github.com/rdeusser/git-hunk/cmd/hunk@latest
+go install github.com/rdeusser/git-hunk/cmd/git-hunk@latest
 ```
 
 Or build from source:
 
 ```bash
 git clone https://github.com/rdeusser/git-hunk.git
-cd hunk
+cd git-hunk
 make build
 ```
 
@@ -49,38 +49,38 @@ make build
 The workflow is straightforward. First, see what's changed:
 
 ```bash
-hunk diff                    # show unstaged changes with line numbers
-hunk diff --staged           # show what's already staged
-hunk diff --json             # machine-readable output for agents
+git-hunk diff                    # show unstaged changes with line numbers
+git-hunk diff --staged           # show what's already staged
+git-hunk diff --json             # machine-readable output for agents
 ```
 
 Then stage the specific lines you want:
 
 ```bash
-hunk stage main.go:10-20            # stage lines 10-20
-hunk stage main.go:10-20,30-40      # stage multiple ranges
-hunk stage main.go:10 utils.go:5-8  # stage from multiple files
-hunk stage --dry-run main.go:10-20  # preview the patch without staging
+git-hunk stage main.go:10-20            # stage lines 10-20
+git-hunk stage main.go:10-20,30-40      # stage multiple ranges
+git-hunk stage main.go:10 utils.go:5-8  # stage from multiple files
+git-hunk stage --dry-run main.go:10-20  # preview the patch without staging
 ```
 
 Check what you're about to commit:
 
 ```bash
-hunk preview                 # show staged changes
-hunk preview --raw           # show as unified diff
+git-hunk preview                 # show staged changes
+git-hunk preview --raw           # show as unified diff
 ```
 
 Commit when ready:
 
 ```bash
-hunk commit -m "fix nil pointer in request handler"
+git-hunk commit -m "fix nil pointer in request handler"
 ```
 
 And if you change your mind:
 
 ```bash
-hunk reset                   # unstage everything
-hunk reset main.go           # unstage just one file
+git-hunk reset                   # unstage everything
+git-hunk reset main.go           # unstage just one file
 ```
 
 ## Why This Matters for Agents
@@ -90,7 +90,7 @@ Traditional git workflows assume a human is making decisions interactively. An a
 Hunk provides JSON output for every command that produces output:
 
 ```bash
-$ hunk diff --json
+$ git-hunk diff --json
 {
   "files": [
     {
@@ -115,21 +115,21 @@ $ hunk diff --json
 }
 ```
 
-An agent can parse this JSON, identify which lines correspond to its changes, and construct the appropriate `hunk stage` command. No interactive prompts, no ambiguity, no manual patch construction.
+An agent can parse this JSON, identify which lines correspond to its changes, and construct the appropriate `git-hunk stage` command. No interactive prompts, no ambiguity, no manual patch construction.
 
 The `--stage-hints` flag goes further—it tells you exactly what commands to run:
 
 ```bash
-$ hunk diff --stage-hints
-hunk stage main.go:11-12
-hunk stage utils.go:5-8,20-25
+$ git-hunk diff --stage-hints
+git-hunk stage main.go:11-12
+git-hunk stage utils.go:5-8,20-25
 ```
 
 ## How It Works
 
 Under the hood, hunk generates valid unified diff patches and applies them to git's staging area using `git apply --cached`. This means it's fully compatible with existing git workflows and doesn't introduce any new state or metadata.
 
-When you run `hunk stage main.go:10-20`, hunk:
+When you run `git-hunk stage main.go:10-20`, hunk:
 
 1. Runs `git diff` to get the current unstaged changes
 2. Parses the diff into a structured representation with line number tracking

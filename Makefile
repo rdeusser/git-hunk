@@ -53,17 +53,17 @@ all: build check
 # INSTALLATION
 # ============
 
-#? build: Build hunk binary
+#? build: Build git-hunk binary
 .PHONY: build
 build:
-	@$(call print, "Building hunk.")
-	$(GOBUILD) $(DEV_LDFLAGS) -o hunk $(PKG)/cmd/hunk
+	@$(call print, "Building git-hunk.")
+	$(GOBUILD) $(DEV_LDFLAGS) -o git-hunk $(PKG)/cmd/git-hunk
 
-#? install: Install hunk to $GOPATH/bin
+#? install: Install git-hunk to $GOPATH/bin
 .PHONY: install
 install:
-	@$(call print, "Installing hunk.")
-	$(GOINSTALL) $(DEV_LDFLAGS) $(PKG)/cmd/hunk
+	@$(call print, "Installing git-hunk.")
+	$(GOINSTALL) $(DEV_LDFLAGS) $(PKG)/cmd/git-hunk
 
 # =======
 # TESTING
@@ -146,7 +146,7 @@ tidy-check: tidy
 .PHONY: clean
 clean:
 	@$(call print, "Cleaning.")
-	$(RM) hunk coverage.txt
+	$(RM) git-hunk coverage.txt
 
 #? gen: Generate code (if any)
 .PHONY: gen

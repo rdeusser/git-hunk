@@ -58,7 +58,7 @@ func writeFile(t *testing.T, dir, name, content string) {
 func TestNewRootCmd(t *testing.T) {
 	cmd := commands.NewRootCmd()
 	require.NotNil(t, cmd)
-	require.Equal(t, "hunk", cmd.Use)
+	require.Equal(t, "git-hunk", cmd.Use)
 
 	// Verify subcommands are registered.
 	subCmds := cmd.Commands()

@@ -22,13 +22,13 @@ func NewPreviewCmd() *cobra.Command {
 
 This is equivalent to 'git diff --cached' but with hunk-style formatting.`,
 		Example: `  # Show staged changes
-  hunk preview
+  git-hunk preview
 
   # Show staged changes in JSON format
-  hunk preview --json
+  git-hunk preview --json
 
   # Show raw unified diff
-  hunk preview --raw`,
+  git-hunk preview --raw`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runPreview(cmd.Context(), cmd.OutOrStdout(), showRaw)
 		},

@@ -18,10 +18,10 @@ func NewResetCmd() *cobra.Command {
 
 This is equivalent to 'git reset HEAD'.`,
 		Example: `  # Unstage all changes
-  hunk reset
+  git-hunk reset
 
   # Unstage specific file
-  hunk reset main.go`,
+  git-hunk reset main.go`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runReset(cmd.Context(), cmd.OutOrStdout(), args)
 		},

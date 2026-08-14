@@ -6,7 +6,7 @@ code in this repository.
 ## Build and Test Commands
 
 ```bash
-make build          # Build hunk binary
+make build          # Build git-hunk binary
 make install        # Install to $GOPATH/bin
 make lint           # Run golangci-lint
 make unit           # Run all tests

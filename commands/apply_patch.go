@@ -20,10 +20,10 @@ func NewApplyPatchCmd() *cobra.Command {
 If no file is specified, reads from stdin.
 This is equivalent to 'git apply --cached'.`,
 		Example: `  # Apply patch from file
-  hunk apply-patch changes.patch
+  git-hunk apply-patch changes.patch
 
   # Apply patch from stdin (useful for piping)
-  cat changes.patch | hunk apply-patch`,
+  cat changes.patch | git-hunk apply-patch`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runApplyPatch(cmd.Context(), cmd.OutOrStdout(), args)

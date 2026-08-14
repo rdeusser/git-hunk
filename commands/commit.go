@@ -20,10 +20,10 @@ func NewCommitCmd() *cobra.Command {
 
 This is a thin wrapper around 'git commit' for convenience.`,
 		Example: `  # Commit with a message
-  hunk commit -m "add error handling"
+  git-hunk commit -m "add error handling"
 
   # Stage and commit in one command
-  hunk stage main.go:10-20 && hunk commit -m "fix bug"`,
+  git-hunk stage main.go:10-20 && git-hunk commit -m "fix bug"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if message == "" {
 				return fmt.Errorf("commit message required (-m)")

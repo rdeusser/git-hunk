@@ -1,5 +1,5 @@
 # Binaries
-/hunk
+/git-hunk
 *.exe
 
 # Test coverage

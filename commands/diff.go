@@ -31,19 +31,19 @@ making it easy to specify line ranges for staging.
 
 Use --json for machine-readable output suitable for AI agents.`,
 		Example: `  # Show all unstaged changes
-  hunk diff
+  git-hunk diff
 
   # Show changes for specific files
-  hunk diff main.go utils.go
+  git-hunk diff main.go utils.go
 
   # Show staged changes
-  hunk diff --staged
+  git-hunk diff --staged
 
   # JSON output for AI agents
-  hunk diff --json
+  git-hunk diff --json
 
   # Show suggested stage commands
-  hunk diff --stage-hints`,
+  git-hunk diff --stage-hints`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDiff(cmd.Context(), cmd.OutOrStdout(), args, diffOptions{
 				staged:      staged,
@@ -73,7 +73,7 @@ Use --json for machine-readable output suitable for AI agents.`,
 	)
 	cmd.Flags().BoolVar(
 		&showStage, "stage-hints", false,
-		"show suggested hunk stage commands",
+		"show suggested git-hunk stage commands",
 	)
 
 	return cmd

@@ -27,18 +27,18 @@ Lines are specified using FILE:LINES syntax where LINES can be:
   - Multiple ranges: main.go:10-20,30,40-50
 
 Line numbers refer to the NEW file (after changes).
-Use 'hunk diff' to see line numbers.`,
+Use 'git-hunk diff' to see line numbers.`,
 		Example: `  # Stage lines 10-20 from main.go
-  hunk stage main.go:10-20
+  git-hunk stage main.go:10-20
 
   # Stage multiple ranges from one file
-  hunk stage main.go:10-20,30-40
+  git-hunk stage main.go:10-20,30-40
 
   # Stage from multiple files
-  hunk stage main.go:10-20 utils.go:5-15
+  git-hunk stage main.go:10-20 utils.go:5-15
 
   # Preview what would be staged
-  hunk stage --dry-run main.go:10-20`,
+  git-hunk stage --dry-run main.go:10-20`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runStage(cmd.Context(), cmd.OutOrStdout(), args, dryRun)
