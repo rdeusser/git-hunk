@@ -28,6 +28,17 @@ type FileDiff struct {
 
 	// IsRenamed is true if this file was renamed.
 	IsRenamed bool
+
+	// OldMode and NewMode are the git file modes either side of the
+	// change (e.g. "100644", "100755"). Both are empty unless the mode
+	// changed, since git only emits the mode lines when it did.
+	OldMode string
+	NewMode string
+}
+
+// ModeChanged reports whether the file's mode differs across the change.
+func (f *FileDiff) ModeChanged() bool {
+	return f.OldMode != "" && f.NewMode != "" && f.OldMode != f.NewMode
 }
 
 // Path returns the canonical file path.

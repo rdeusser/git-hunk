@@ -247,12 +247,23 @@ func convertFileDiff(f *godiff.FileDiff) *FileDiff {
 		fd.IsRenamed = true
 	}
 
-	// Check for binary.
+	// The extended header block carries facts that exist nowhere else in
+	// the diff: whether the blob is binary, and the file modes either
+	// side of a mode change. Dropping it loses the exec bit.
 	for _, ex := range f.Extended {
-		if strings.Contains(ex, "Binary files") {
+		switch {
+		case strings.Contains(ex, "Binary files"):
 			fd.IsBinary = true
 
-			break
+		case strings.HasPrefix(ex, "old mode "):
+			fd.OldMode = strings.TrimSpace(
+				strings.TrimPrefix(ex, "old mode "),
+			)
+
+		case strings.HasPrefix(ex, "new mode "):
+			fd.NewMode = strings.TrimSpace(
+				strings.TrimPrefix(ex, "new mode "),
+			)
 		}
 	}
 

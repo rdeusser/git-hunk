@@ -82,6 +82,8 @@ func Generate(
 func writeFileHeader(
 	buf *bytes.Buffer, file *diff.FileDiff, sel *diff.FileSelection,
 ) {
+	writeExtendedHeader(buf, file)
+
 	switch {
 	case file.IsNew:
 		fmt.Fprintf(buf, "--- /dev/null\n")
@@ -99,6 +101,41 @@ func writeFileHeader(
 	default:
 		fmt.Fprintf(buf, "--- a/%s\n", file.OldName)
 		fmt.Fprintf(buf, "+++ b/%s\n", file.NewName)
+	}
+}
+
+// writeExtendedHeader writes the "diff --git" line and the extended header
+// lines that git apply needs in order to do anything beyond replacing hunk
+// content: a rename's two paths, and a mode change's two modes. Without
+// them git resolves the patch against "+++ b/<new>" alone, which for a
+// rename is a path that does not hold the old content — the patch is
+// rejected — and for a mode change silently drops the new mode.
+//
+// Nothing is written for an ordinary content change: the "---"/"+++" pair
+// already says everything, and the rest of git's header block cannot be
+// reproduced honestly for a partial selection. A "similarity index" or
+// "index <blob>..<blob>" line computed over the whole file would describe a
+// result this patch does not produce.
+func writeExtendedHeader(buf *bytes.Buffer, file *diff.FileDiff) {
+	if !file.IsRenamed && !file.ModeChanged() {
+		return
+	}
+
+	oldPath, newPath := file.OldName, file.NewName
+	if !file.IsRenamed {
+		newPath = oldPath
+	}
+
+	fmt.Fprintf(buf, "diff --git a/%s b/%s\n", oldPath, newPath)
+
+	if file.ModeChanged() {
+		fmt.Fprintf(buf, "old mode %s\n", file.OldMode)
+		fmt.Fprintf(buf, "new mode %s\n", file.NewMode)
+	}
+
+	if file.IsRenamed {
+		fmt.Fprintf(buf, "rename from %s\n", oldPath)
+		fmt.Fprintf(buf, "rename to %s\n", newPath)
 	}
 }
 
@@ -590,6 +627,8 @@ func effectiveLineNum(line diff.DiffLine) int {
 func writeFullFileHeader(
 	buf *bytes.Buffer, file *diff.FileDiff, fullDeletion bool,
 ) {
+	writeExtendedHeader(buf, file)
+
 	switch {
 	case file.IsNew:
 		fmt.Fprintf(buf, "--- /dev/null\n")

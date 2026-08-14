@@ -937,3 +937,80 @@ func TestStageErrorDoesNotPrintUsage(t *testing.T) {
 		"stage error must not print examples block",
 	)
 }
+
+// TestStageRenamedFile covers a rename that also carries edits. The patch
+// must name both paths in a "diff --git" line and repeat them as rename
+// from/to, or git apply resolves it against the new path — which does not
+// hold the old content — and rejects the whole patch.
+func TestStageRenamedFile(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "old.txt", "a\nb\nc\nd\ne\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	require.NoError(t, os.Remove(filepath.Join(dir, "old.txt")))
+	writeFile(t, dir, "new.txt", "a\nB2\nc\nD2\ne\n")
+	gitCmd(t, dir, "add", "-N", "new.txt")
+
+	_, err := runCLI(t, "--dir", dir, "stage", "new.txt:2")
+	require.NoError(t, err, "staging from a renamed file must succeed")
+
+	require.Contains(t, gitCmd(t, dir, "diff", "--cached", "--summary"),
+		"rename old.txt => new.txt",
+		"the rename itself must be staged",
+	)
+
+	require.Equal(t, "a\nB2\nc\nd\ne\n",
+		gitCmd(t, dir, "show", ":new.txt"),
+		"only the selected line may be staged",
+	)
+}
+
+// TestStageModeChange covers the exec bit. Git reports a mode change only in
+// the extended header block, so a patch built from hunk bodies alone leaves
+// the mode behind.
+func TestStageModeChange(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "s.sh", "#!/bin/sh\necho a\necho b\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	path := filepath.Join(dir, "s.sh")
+	require.NoError(t, os.Chmod(path, 0o755))
+	writeFile(t, dir, "s.sh", "#!/bin/sh\necho A2\necho b\n")
+
+	_, err := runCLI(t, "--dir", dir, "stage", "s.sh:2")
+	require.NoError(t, err)
+
+	require.Contains(t, gitCmd(t, dir, "ls-files", "-s", "s.sh"), "100755",
+		"the execute bit must reach the index",
+	)
+}
+
+// TestStageRenameWithModeChange covers both extended headers at once, in the
+// order git writes them: mode lines before rename lines.
+func TestStageRenameWithModeChange(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "old.sh", "#!/bin/sh\necho a\necho b\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	require.NoError(t, os.Remove(filepath.Join(dir, "old.sh")))
+	writeFile(t, dir, "new.sh", "#!/bin/sh\necho A2\necho b\n")
+	require.NoError(t, os.Chmod(filepath.Join(dir, "new.sh"), 0o755))
+	gitCmd(t, dir, "add", "-N", "new.sh")
+
+	_, err := runCLI(t, "--dir", dir, "stage", "new.sh:2")
+	require.NoError(t, err)
+
+	require.Contains(t, gitCmd(t, dir, "diff", "--cached", "--summary"),
+		"rename old.sh => new.sh",
+	)
+	require.Contains(t, gitCmd(t, dir, "ls-files", "-s", "new.sh"), "100755")
+}
