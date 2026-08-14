@@ -64,10 +64,6 @@ func (c *StageCmd) Run(ctx context.Context, g *Globals) error {
 		return err
 	}
 
-	if len(patchBytes) == 0 {
-		return fmt.Errorf("no matching lines found for selection")
-	}
-
 	if c.DryRun {
 		fmt.Fprint(g.Out, string(patchBytes))
 

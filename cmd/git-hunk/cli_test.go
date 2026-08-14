@@ -1101,3 +1101,33 @@ func TestStageCRLFFile(t *testing.T) {
 		"the staged blob must keep every carriage return",
 	)
 }
+
+// TestStageReportsSelectionsThatMatchNothing covers a selection naming a file
+// or a range with no changes, alongside one that does match. The unmatched
+// selection used to be dropped from the patch, so the command staged less
+// than it was asked for and still reported success.
+func TestStageReportsSelectionsThatMatchNothing(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	writeFile(t, dir, "a.txt", "a1\na2\na3\n")
+	writeFile(t, dir, "b.txt", "b1\nb2\nb3\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	writeFile(t, dir, "a.txt", "a1\nA2\na3\n")
+
+	output, err := runCLI(t, "--dir", dir,
+		"stage", "a.txt:2", "b.txt:2", "missing.txt:5",
+	)
+	require.Error(t, err, "a selection matching nothing must fail the stage")
+	require.Contains(t, output, "b.txt:2")
+	require.Contains(t, output, "missing.txt:5")
+	require.NotContains(t, output, "a.txt",
+		"the selection that did match is not the problem",
+	)
+
+	require.Empty(t, gitCmd(t, dir, "diff", "--cached", "--name-only"),
+		"a failed stage must leave the index untouched",
+	)
+}

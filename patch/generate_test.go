@@ -14,7 +14,7 @@ func TestGenerate(t *testing.T) {
 		name       string
 		diffText   string
 		selections []string
-		wantEmpty  bool
+		wantErr    string
 		validate   func(t *testing.T, result []byte)
 	}{
 		{
@@ -66,7 +66,7 @@ func TestGenerate(t *testing.T) {
  func main() {}
 `,
 			selections: []string{"main.go:100-200"},
-			wantEmpty:  true,
+			wantErr:    "no changes match main.go:100-200",
 		},
 		{
 			name: "multiple files",
@@ -129,14 +129,14 @@ diff --git a/utils.go b/utils.go
 			require.NoError(t, err)
 
 			result, err := patch.Generate(parsed, selections)
-			require.NoError(t, err)
 
-			if tc.wantEmpty {
-				require.Empty(t, result)
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
 
 				return
 			}
 
+			require.NoError(t, err)
 			require.NotEmpty(t, result)
 
 			if tc.validate != nil {

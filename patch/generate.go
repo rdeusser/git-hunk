@@ -4,6 +4,7 @@ package patch
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/rdeusser/git-hunk/diff"
 )
@@ -27,6 +28,12 @@ func writeDiffLine(buf *bytes.Buffer, line diff.DiffLine) {
 
 // Generate creates a patch containing only the selected lines.
 // The patch can be applied with `git apply --cached`.
+//
+// Every selection must contribute at least one line. A selection naming a
+// path or a range with no changes fails the whole patch rather than being
+// dropped from it, so a caller that mistypes one of several selections is
+// told, instead of being handed a patch that silently stages less than it
+// asked for.
 func Generate(
 	parsed *diff.ParsedDiff, selections []*diff.FileSelection,
 ) ([]byte, error) {
@@ -35,6 +42,8 @@ func Generate(
 	claimed := claimedPaths(parsed)
 
 	var buf bytes.Buffer
+
+	matched := make(map[string]bool)
 
 	for file := range parsed.Files() {
 		sel := selectionFor(selMap, file, claimed)
@@ -47,6 +56,8 @@ func Generate(
 		if len(filteredHunks) == 0 {
 			continue
 		}
+
+		matched[sel.Path] = true
 
 		// Write file header.
 		writeFileHeader(&buf, file, sel)
@@ -62,7 +73,36 @@ func Generate(
 		}
 	}
 
+	if unmatched := unmatchedSelections(selections, matched); len(unmatched) > 0 {
+		return nil, fmt.Errorf(
+			"no changes match %s", strings.Join(unmatched, " "),
+		)
+	}
+
 	return buf.Bytes(), nil
+}
+
+// unmatchedSelections lists the selections that contributed no lines, in the
+// order the caller gave them. Duplicate paths report once, under the merged
+// ranges NewSelectionMap folded them into.
+func unmatchedSelections(
+	selections []*diff.FileSelection, matched map[string]bool,
+) []string {
+	var unmatched []string
+
+	seen := make(map[string]bool)
+
+	for _, sel := range selections {
+		if matched[sel.Path] || seen[sel.Path] {
+			continue
+		}
+
+		seen[sel.Path] = true
+
+		unmatched = append(unmatched, sel.String())
+	}
+
+	return unmatched
 }
 
 // selectionFor resolves the selection naming file, or nil when the caller
