@@ -62,4 +62,4 @@ Line numbers refer to **new file** lines (after edits), matching how editors dis
 - Comments focus on the why/how vs just the plain what.
 - No `internal/` packages - all packages are at top level.
 - Test files use `_test` suffix but stay in same package (not `package foo_test`).
-- Test function names use camelCase, not underscores (e.g., `TestRebaseRunSimple` not `TestRebaseRun_Simple`).
+- Test function names use camelCase, not underscores (e.g., `TestStageRangeSimple` not `TestStageRange_Simple`).
