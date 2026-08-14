@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	github.com/alecthomas/kong v1.16.1
-	github.com/sourcegraph/go-diff v0.7.0
+	github.com/sourcegraph/go-diff v0.8.0
 	github.com/stretchr/testify v1.9.0
 	pgregory.net/rapid v1.2.0
 )

@@ -20,7 +20,12 @@ func Parse(diffText string) (*ParsedDiff, error) {
 		return &ParsedDiff{}, nil
 	}
 
-	files, err := godiff.ParseMultiFileDiff([]byte(diffText))
+	// KeepCR matters for CRLF files. Stripping the carriage returns makes
+	// every line of the generated patch differ from the blob it must apply
+	// against, and git apply rejects the whole thing.
+	files, err := godiff.ParseMultiFileDiffOptions(
+		[]byte(diffText), godiff.ParseOptions{KeepCR: true},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse diff: %w", err)
 	}

@@ -1076,3 +1076,28 @@ func TestStageRenamedFileByOldName(t *testing.T) {
 
 	require.Equal(t, "a\nB2\nc\nd\ne\n", gitCmd(t, dir, "show", ":new.txt"))
 }
+
+// TestStageCRLFFile covers a file with Windows line endings. The parser used
+// to strip the carriage returns, so every line of the generated patch
+// differed from the blob it had to apply against and git apply rejected the
+// whole patch.
+func TestStageCRLFFile(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	gitCmd(t, dir, "config", "core.autocrlf", "false")
+
+	writeFile(t, dir, "f.txt", "a\r\nb\r\nc\r\nd\r\ne\r\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	writeFile(t, dir, "f.txt", "a\r\nB2\r\nc\r\nD2\r\ne\r\n")
+
+	_, err := runCLI(t, "--dir", dir, "stage", "f.txt:2")
+	require.NoError(t, err, "staging from a CRLF file must succeed")
+
+	require.Equal(t, "a\r\nB2\r\nc\r\nd\r\ne\r\n",
+		gitCmd(t, dir, "show", ":f.txt"),
+		"the staged blob must keep every carriage return",
+	)
+}
