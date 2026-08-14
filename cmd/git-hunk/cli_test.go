@@ -58,13 +58,15 @@ func writeFile(t *testing.T, dir, name, content string) {
 	require.NoError(t, err)
 }
 
-// runCLI runs the CLI the way main does and returns everything it wrote.
+// runCLI runs the CLI the way main does and returns everything it wrote. It
+// calls execute rather than run so the tests keep their own context and do
+// not install signal handlers.
 func runCLI(t *testing.T, argv ...string) (string, error) {
 	t.Helper()
 
 	var output bytes.Buffer
 
-	err := run(
+	err := execute(
 		context.Background(), argv,
 		strings.NewReader(""), &output, &output,
 	)

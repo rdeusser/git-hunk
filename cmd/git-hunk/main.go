@@ -65,31 +65,39 @@ type Globals struct {
 }
 
 func main() {
-	// Cancelling on a signal is what stops a long git command from
-	// outliving us. The executor turns that cancellation into SIGTERM so
-	// git unlinks .git/index.lock on its way out; killing it outright
-	// would strand the lock and wedge the repository.
+	os.Exit(run())
+}
+
+// run binds the process to the CLI and reports its exit status. The signal
+// context lives here rather than in main so that its teardown can be
+// deferred; an os.Exit alongside it would skip the deferred call.
+//
+// Cancelling on a signal is what stops a long git command from outliving
+// us. The executor turns that cancellation into SIGTERM so git unlinks
+// .git/index.lock on its way out; killing it outright would strand the
+// lock and wedge the repository.
+func run() int {
 	ctx, stop := signal.NotifyContext(
 		context.Background(), os.Interrupt, syscall.SIGTERM,
 	)
+	defer stop()
 
-	err := run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
-
-	stop()
-
+	err := execute(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 	if err != nil {
-		os.Exit(1)
+		return 1
 	}
+
+	return 0
 }
 
-// run parses argv and executes the selected command. Failures are reported on
+// execute parses argv and runs the selected command. Failures are reported on
 // errOut and returned rather than exiting, which keeps the whole CLI — error
 // paths included — reachable from tests.
 //
 // Usage is deliberately never printed alongside an error: a wall of help text
 // buried real failures such as "patch does not apply", and callers piping our
 // output want a clean error line.
-func run(
+func execute(
 	ctx context.Context, argv []string,
 	in io.Reader, out, errOut io.Writer,
 ) error {
