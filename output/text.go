@@ -262,7 +262,7 @@ func FormatStagingCommands(w io.Writer, parsed *diff.ParsedDiff) error {
 		}
 
 		if len(ranges) > 0 {
-			fmt.Fprintf(w, "hunk stage %s:%s\n",
+			fmt.Fprintf(w, "git-hunk stage %s:%s\n",
 				file.Path(), strings.Join(ranges, ","))
 		}
 	}
