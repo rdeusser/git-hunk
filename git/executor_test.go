@@ -241,26 +241,6 @@ func TestShellExecutorStatus(t *testing.T) {
 	require.NotEmpty(t, status.UnstagedFiles, "should have unstaged files")
 }
 
-func TestShellExecutorRoot(t *testing.T) {
-	dir, cleanup := setupTestRepo(t)
-	defer cleanup()
-
-	// Create subdirectory.
-	subdir := filepath.Join(dir, "subdir")
-	require.NoError(t, os.MkdirAll(subdir, 0755))
-
-	executor := git.NewShellExecutor(subdir)
-	ctx := context.Background()
-
-	root, err := executor.Root(ctx)
-	require.NoError(t, err)
-
-	// Resolve symlinks for comparison (macOS /var -> /private/var).
-	expectedDir, _ := filepath.EvalSymlinks(dir)
-	actualRoot, _ := filepath.EvalSymlinks(root)
-	require.Equal(t, expectedDir, actualRoot)
-}
-
 func TestShellExecutorErrorHandling(t *testing.T) {
 	// Non-existent directory.
 	executor := git.NewShellExecutor("/nonexistent/path/that/does/not/exist")

@@ -84,7 +84,6 @@ type Executor interface {
     Reset(ctx context.Context) error
     ResetPath(ctx context.Context, path string) error
     Status(ctx context.Context) (*RepoStatus, error)
-    Root(ctx context.Context) (string, error)
 }
 ```
 

@@ -187,16 +187,6 @@ func isRenameOrCopy(code byte) bool {
 	return code == 'R' || code == 'C'
 }
 
-// Root returns the repository root directory.
-func (e *ShellExecutor) Root(ctx context.Context) (string, error) {
-	output, err := e.run(ctx, nil, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(output), nil
-}
-
 // RepoStatus represents the current state of the repository.
 type RepoStatus struct {
 	// StagedFiles lists files with staged changes.
