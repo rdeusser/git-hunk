@@ -688,20 +688,16 @@ func arbitraryStageProperty(rt *rapid.T) {
 		parsed, err := diff.Parse(diffText)
 		require.NoError(rt, err)
 
-		// Collect every changed line's selection number: additions by
-		// new-line, deletions by old-line — the numbers hunk matches on.
+		// Collect every changed line's selection number. Asking the line
+		// itself keeps the rule in one place, so a test cannot drift from
+		// the matching that staging actually performs.
 		var changed []int
 		for file := range parsed.Files() {
 			for _, hunk := range file.Hunks {
 				for _, ln := range hunk.Lines {
-					switch ln.Op {
-					case diff.OpAdd:
+					if ln.IsChange() {
 						changed = append(
-							changed, ln.NewLineNum,
-						)
-					case diff.OpDelete:
-						changed = append(
-							changed, ln.OldLineNum,
+							changed, ln.EffectiveLineNum(),
 						)
 					}
 				}

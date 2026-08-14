@@ -396,7 +396,7 @@ func findChangeBlocks(hunk *diff.Hunk, sel *diff.FileSelection) ([]changeBlock, 
 			cur.hasDel = true
 		}
 
-		lineNum := effectiveLineNum(line)
+		lineNum := line.EffectiveLineNum()
 		if sel.Contains(lineNum) {
 			selected[i] = true
 			cur.anySelected = true
@@ -695,16 +695,6 @@ func computeNewStart(original *diff.Hunk, indices []int) int {
 		}
 	}
 	return original.NewStart
-}
-
-// effectiveLineNum returns the line number to use for selection matching.
-// For additions, uses NewLineNum. For deletions, uses OldLineNum.
-func effectiveLineNum(line diff.DiffLine) int {
-	if line.Op == diff.OpAdd {
-		return line.NewLineNum
-	}
-
-	return line.OldLineNum
 }
 
 // writeFullFileHeader writes the "--- "/"+++ " path lines for a patch that
