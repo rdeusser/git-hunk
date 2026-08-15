@@ -24,15 +24,6 @@ func (e *AmbiguousSelectionError) Error() string {
 // hunk and then by position within that hunk.
 type resolvedSelection [][]bool
 
-// changeSite is one changed line, located well enough to settle a contested
-// selector value.
-type changeSite struct {
-	hunk  int
-	line  int
-	value int
-	group int
-}
-
 // resolveSelection decides which of the file's changed lines the selection
 // names.
 //
@@ -51,9 +42,7 @@ type changeSite struct {
 // When neither holds, the selection really is undecidable and this reports
 // rather than guesses. No rule can do better: the two changes have the same
 // address, so a caller who names only that address has said both.
-func resolveSelection(
-	file *diff.FileDiff, sel *diff.FileSelection,
-) (resolvedSelection, error) {
+func resolveSelection(file *diff.FileDiff, sel *diff.FileSelection) (resolvedSelection, error) {
 	resolved := make(resolvedSelection, len(file.Hunks))
 	for i, hunk := range file.Hunks {
 		resolved[i] = make([]bool, len(hunk.Lines))
@@ -95,6 +84,15 @@ func resolveSelection(
 	}
 
 	return resolved, nil
+}
+
+// changeSite is one changed line, located well enough to settle a contested
+// selector value.
+type changeSite struct {
+	hunk  int
+	line  int
+	value int
+	group int
 }
 
 // changeSites lists every changed line in the file along with the values each
@@ -139,9 +137,7 @@ func changeSites(file *diff.FileDiff) ([]changeSite, map[int][]int) {
 
 // contestedValues maps each selected value to the change groups it lands in.
 // Only a value landing in two or more groups is in conflict.
-func contestedValues(
-	sites []changeSite, sel *diff.FileSelection,
-) map[int][]int {
+func contestedValues(sites []changeSite, sel *diff.FileSelection) map[int][]int {
 	holders := make(map[int]map[int]bool)
 
 	for _, site := range sites {
@@ -188,9 +184,7 @@ func coveredGroups(values map[int][]int, sel *diff.FileSelection) map[int]bool {
 // reachedGroups reports the groups the selection names through a value that
 // lands nowhere else. Such a value is proof the caller meant that group, so it
 // can settle a value that is in conflict.
-func reachedGroups(
-	sites []changeSite, sel *diff.FileSelection, contested map[int][]int,
-) map[int]bool {
+func reachedGroups(sites []changeSite, sel *diff.FileSelection, contested map[int][]int) map[int]bool {
 	reached := make(map[int]bool)
 
 	for _, site := range sites {
