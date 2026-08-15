@@ -62,8 +62,16 @@ func Generate(parsed *diff.ParsedDiff, selections []*diff.FileSelection) ([]byte
 			continue
 		}
 
+		// Settle which changed lines the selection names before any of
+		// them are filtered. One selector value can land on two separate
+		// changes, and only the whole file says which was meant.
+		resolved, err := resolveSelection(file, sel)
+		if err != nil {
+			return nil, err
+		}
+
 		// Filter hunks to only include selected lines.
-		filteredHunks := filterHunks(file.Hunks, sel)
+		filteredHunks := filterHunks(file.Hunks, resolved)
 		if len(filteredHunks) == 0 {
 			continue
 		}
@@ -285,11 +293,11 @@ func isFullDeletion(file *diff.FileDiff, sel *diff.FileSelection) bool {
 // filterHunks returns hunks containing only the selected lines.
 // Context lines are preserved as needed for valid patches. When non-contiguous
 // lines are selected within a hunk, the hunk is split into multiple hunks.
-func filterHunks(hunks []*diff.Hunk, sel *diff.FileSelection) []*diff.Hunk {
+func filterHunks(hunks []*diff.Hunk, resolved resolvedSelection) []*diff.Hunk {
 	var result []*diff.Hunk
 
-	for _, hunk := range hunks {
-		filtered := filterHunk(hunk, sel)
+	for i, hunk := range hunks {
+		filtered := filterHunk(hunk, resolved[i])
 		result = append(result, filtered...)
 	}
 
@@ -300,12 +308,12 @@ func filterHunks(hunks []*diff.Hunk, sel *diff.FileSelection) []*diff.Hunk {
 // changes are selected, the hunk is split into multiple hunks, one for each
 // contiguous block of selected changes. Each resulting hunk is independently
 // valid for git apply.
-func filterHunk(hunk *diff.Hunk, sel *diff.FileSelection) []*diff.Hunk {
+func filterHunk(hunk *diff.Hunk, named []bool) []*diff.Hunk {
 	// Find contiguous blocks of selected changes plus the per-line
 	// selection mask. The mask lets buildHunkFromBlock distinguish
 	// "selected change we own" from "unselected change we must walk
 	// past when reaching for anchor context".
-	blocks, selected := findChangeBlocks(hunk, sel)
+	blocks, selected := findChangeBlocks(hunk, named)
 	if len(blocks) == 0 {
 		return nil
 	}
@@ -356,7 +364,7 @@ func filterHunk(hunk *diff.Hunk, sel *diff.FileSelection) []*diff.Hunk {
 // mask to decide how to treat each line of the block range and the
 // context-expansion path: unselected additions are dropped, unselected
 // deletions are re-tagged as context, and selected lines render unchanged.
-func findChangeBlocks(hunk *diff.Hunk, sel *diff.FileSelection) ([]changeBlock, []bool) {
+func findChangeBlocks(hunk *diff.Hunk, named []bool) ([]changeBlock, []bool) {
 	// Build a selected-line set that expands mixed change groups.
 	// A mixed group is a contiguous run of change lines containing
 	// both additions and deletions. When any member is selected,
@@ -396,8 +404,7 @@ func findChangeBlocks(hunk *diff.Hunk, sel *diff.FileSelection) ([]changeBlock, 
 			cur.hasDel = true
 		}
 
-		lineNum := line.EffectiveLineNum()
-		if sel.Contains(lineNum) {
+		if named[i] {
 			selected[i] = true
 			cur.anySelected = true
 		}

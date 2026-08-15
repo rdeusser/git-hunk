@@ -1,6 +1,7 @@
 package patch_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -491,40 +492,40 @@ func TestProperty_MultiGroupSelectionAlwaysApplies(t *testing.T) {
 		origLines = append(origLines, tail)
 		modLines = append(modLines, tail)
 
-		// The selection set: every intended group's added new-line
-		// numbers. New-line numbers are unique per line, so this hits
-		// exactly the intended additions — but the same integers may
-		// also match some unintended group's deletions by old-line.
+		// The selection set: every number an intended group occupies,
+		// which is its additions by new-line and its deletions by
+		// old-line. Naming a group whole is what tells the generator
+		// which group a shared number belongs to, and it is what a
+		// caller pasting a listed row does.
 		selSet := make(map[int]bool)
-		var selectedNewLines []int
+		var selected []int
 		for i := range groups {
 			if !groups[i].intended {
 				continue
 			}
-			for _, ln := range groups[i].newNums {
-				selSet[ln] = true
-				selectedNewLines = append(selectedNewLines, ln)
-			}
-		}
 
-		// Resolve the ACTUAL selection: a mixed group is staged in full
-		// if ANY of its additions (by new-line) or deletions (by
-		// old-line) is in the selection set. Build the expected index
-		// from that resolution.
-		hit := func(nums []int) bool {
-			for _, n := range nums {
-				if selSet[n] {
-					return true
+			nums := append(
+				append([]int{}, groups[i].newNums...),
+				groups[i].oldNums...,
+			)
+			for _, ln := range nums {
+				if selSet[ln] {
+					continue
 				}
+
+				selSet[ln] = true
+				selected = append(selected, ln)
 			}
-			return false
 		}
 
+		// Exactly the intended groups are staged. A selection number
+		// aimed at one group's addition can also land on another
+		// group's deletion, but the unintended group is not the one
+		// the rest of the selection names whole, so it stays untouched.
 		expected := append([]string{}, head...)
 		for i := range groups {
 			g := &groups[i]
-			staged := hit(g.newNums) || hit(g.oldNums)
-			if staged {
+			if g.intended {
 				for j := 0; j < g.addCount; j++ {
 					expected = append(
 						expected,
@@ -563,7 +564,7 @@ func TestProperty_MultiGroupSelectionAlwaysApplies(t *testing.T) {
 		require.NoError(rt, err)
 
 		var parts []string
-		for _, ln := range selectedNewLines {
+		for _, ln := range selected {
 			parts = append(parts, fmt.Sprintf("%d", ln))
 		}
 		sel, err := diff.ParseFileSelection(
@@ -574,6 +575,15 @@ func TestProperty_MultiGroupSelectionAlwaysApplies(t *testing.T) {
 		data, err := patch.Generate(
 			parsed, []*diff.FileSelection{sel},
 		)
+
+		// Every group here is named whole, so the generator can tell
+		// which group a shared number belongs to. A refusal would mean
+		// it could not, which is worth seeing rather than passing over.
+		var ambiguous *patch.AmbiguousSelectionError
+		if errors.As(err, &ambiguous) {
+			rt.Fatalf("whole-group selection refused: %v", err)
+		}
+
 		require.NoError(rt, err)
 		require.NotEmpty(rt, data)
 
@@ -945,6 +955,11 @@ func joinContent(lines []string, trailingNL bool) string {
 // via `git apply --cached`, and — when wantContent is non-nil — asserts the
 // resulting index equals it byte for byte. It fails the property with the
 // offending patch on any rejection or mismatch.
+//
+// A selection whose every reading is equally good is refused rather than
+// generated, and that refusal is a pass: the property is that staging is
+// either exactly right or declined, never quietly wrong. It reports so a
+// generator that only ever produced refusals would be visible.
 func applySelection(t *rapid.T, repoDir string, parsed *diff.ParsedDiff, nums []int, wantContent *string) {
 	t.Helper()
 
@@ -958,6 +973,14 @@ func applySelection(t *rapid.T, repoDir string, parsed *diff.ParsedDiff, nums []
 	require.NoError(t, err)
 
 	data, err := patch.Generate(parsed, []*diff.FileSelection{sel})
+
+	var ambiguous *patch.AmbiguousSelectionError
+	if errors.As(err, &ambiguous) {
+		t.Logf("selection refused as ambiguous: %v", err)
+
+		return
+	}
+
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
 

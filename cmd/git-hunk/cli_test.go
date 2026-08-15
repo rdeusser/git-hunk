@@ -1286,16 +1286,16 @@ func TestListEmpty(t *testing.T) {
 	require.Empty(t, listGroups(t, dir))
 }
 
-// TestListSelectorsCollideAcrossNumbering documents a defect that predates
-// this command. FILE:LINES has one integer namespace, but a diff has two: a
-// deletion is addressed by its old-file line and an addition by its new-file
-// line. Once an earlier addition shifts the new numbering, the two spaces
-// overlap and one selector reaches changes in both.
+// TestListRowsSurviveCollidingNumbering covers the case that makes the
+// listing worth trusting. FILE:LINES has one integer namespace but a diff has
+// two: a deletion is addressed by its old-file line and an addition by its
+// new-file line. Once an earlier addition shifts the new numbering, one value
+// lands on changes in two separate places.
 //
-// The result is that list can print a row whose selector stages more than the
-// row describes. This test asserts the behavior as it is so the suite records
-// it. Fixing the numbering flips these assertions, which is the point.
-func TestListSelectorsCollideAcrossNumbering(t *testing.T) {
+// Staging a listed row must still stage that row and nothing else, which it
+// can because a row names its group whole and the rest of the row says which
+// group the shared value belongs to.
+func TestListRowsSurviveCollidingNumbering(t *testing.T) {
 	dir, cleanup := setupTestRepo(t)
 	defer cleanup()
 
@@ -1315,22 +1315,55 @@ func TestListSelectorsCollideAcrossNumbering(t *testing.T) {
 
 	first, second := groups[0], groups[1]
 	require.LessOrEqual(t, second.Start, first.End,
-		"the defect is that the ranges overlap; without the overlap "+
-			"the rest of this test is meaningless",
+		"the ranges must overlap or this test proves nothing",
 	)
 
+	for _, group := range groups {
+		gitCmd(t, dir, "reset")
+
+		_, err := runCLI(t, "--dir", dir, "stage", group.Selector)
+		require.NoError(t, err)
+
+		added, deleted := countStaged(t, dir)
+		require.Equal(t, group.Added, added,
+			"staging %s added lines the row did not list",
+			group.Selector,
+		)
+		require.Equal(t, group.Deleted, deleted,
+			"staging %s deleted lines the row did not list",
+			group.Selector,
+		)
+	}
+
 	gitCmd(t, dir, "reset")
+}
 
-	_, err := runCLI(t, "--dir", dir, "stage", first.Selector)
-	require.NoError(t, err)
+// TestStageRefusesAnUndecidableSelection covers the value that names two
+// changes with nothing else to separate them. Both readings are equally good,
+// so staging either would be a guess, and a guess here silently commits a
+// change the caller did not ask for.
+func TestStageRefusesAnUndecidableSelection(t *testing.T) {
+	dir, cleanup := setupTestRepo(t)
+	defer cleanup()
 
-	added, deleted := countStaged(t, dir)
-	require.Greater(t, added+deleted, first.Added+first.Deleted,
-		"KNOWN DEFECT: staging %s reaches past the row it describes",
-		first.Selector,
+	writeFile(t, dir, "main.go", "package main\n\nfunc main() {\n\told()\n}\n")
+	gitCmd(t, dir, "add", "-A")
+	gitCmd(t, dir, "commit", "-m", "initial")
+
+	writeFile(t, dir, "main.go",
+		"package main\n\nimport \"log\"\n\nfunc main() {\n\tnew()\n}\n",
 	)
 
-	gitCmd(t, dir, "reset")
+	output, err := runCLI(t, "--dir", dir, "stage", "main.go:4")
+	require.Error(t, err)
+	require.Contains(t, output, "main.go:4 names two separate changes")
+	require.Contains(t, output, "git-hunk list",
+		"the error must say how to get an unambiguous selection",
+	)
+
+	require.Empty(t, gitCmd(t, dir, "diff", "--cached", "--name-only"),
+		"a refused stage must leave the index untouched",
+	)
 }
 
 // TestListMixedBlockIsOneRow pins the atomicity rule. The deletions and the

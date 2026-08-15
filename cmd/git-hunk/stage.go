@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/rdeusser/git-hunk/diff"
@@ -60,6 +61,17 @@ func (c *StageCmd) Run(ctx context.Context, g *Globals) error {
 
 	data, err := patch.Generate(parsed, selections)
 	if err != nil {
+		// The core reports the clash without knowing what the caller
+		// can do about it. Naming one of the changes whole is the way
+		// out, and list prints exactly those names.
+		var ambiguous *patch.AmbiguousSelectionError
+		if errors.As(err, &ambiguous) {
+			return fmt.Errorf(
+				"%w, run 'git-hunk list' and stage one of the "+
+					"rows it prints", err,
+			)
+		}
+
 		return err
 	}
 
