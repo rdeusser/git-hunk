@@ -22,8 +22,13 @@ func (c *StageCmd) Help() string {
   - A range: main.go:10-20
   - Multiple ranges: main.go:10-20,30,40-50
 
-Line numbers refer to the NEW file (after changes).
-Use 'git-hunk diff' to see line numbers.
+Line numbers refer to the NEW file (after changes). A deleted line is
+not in the new file, so it keeps its old-file number instead. The two
+can land on the same value, and a value that names two separate changes
+is refused rather than staged.
+
+Use 'git-hunk list' for selections that are never in doubt, or
+'git-hunk diff' to see every line number.
 
 Examples:
   # Stage lines 10-20 from main.go

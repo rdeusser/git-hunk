@@ -53,7 +53,12 @@ The core staging syntax is `FILE:LINES` where LINES is comma-separated ranges:
 - `main.go:10-20,30-40` - Multiple ranges
 - `main.go:10 utils.go:5-8` - Multiple files (space-separated args)
 
-Line numbers refer to **new file** lines (after edits), matching how editors display content.
+Line numbers refer to **new file** lines (after edits), matching how editors
+display content. A deleted line has no new-file line, so it is addressed by
+its **old file** number. Both numberings share one integer namespace, so a
+value can name two separate changes; `patch.resolveSelection` settles that
+from the rest of the selection and refuses what it cannot settle. `git-hunk
+list` prints selections that are never in doubt.
 
 ## Code Style
 

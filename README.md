@@ -18,7 +18,9 @@ git-hunk stage main.go:42-45
 
 That's it. Lines 42 through 45 from `main.go` are now staged, and nothing else. The remaining unstaged changes in the file stay exactly where they are.
 
-The line numbers refer to the **new file** (after your edits), which matches how editors display content and how agents think about their changes. You can see all available changes with line numbers using `git-hunk diff`:
+The line numbers refer to the **new file** (after your edits), which matches how editors display content and how agents think about their changes. A deleted line is not in the new file, so it keeps its **old file** number instead. Both numberings share one set of integers, so a value can occasionally name two separate changes — `git-hunk` works out which one you meant from the rest of your selection, and refuses rather than guesses when it cannot. Use `git-hunk list` (below) for selections that are never in doubt.
+
+You can see all available changes with line numbers using `git-hunk diff`:
 
 ```bash
 $ git-hunk diff
@@ -53,6 +55,27 @@ git-hunk diff                    # show unstaged changes with line numbers
 git-hunk diff --staged           # show what's already staged
 git-hunk diff --json             # machine-readable output for agents
 ```
+
+Or list each change that can be staged on its own:
+
+```bash
+git-hunk list                    # one row per independently stageable change
+git-hunk list --staged           # the same for what's already staged
+git-hunk list --json             # machine-readable output for agents
+```
+
+Each row's first column is the selection that stages that row, so a row can be
+pasted straight into `git-hunk stage`:
+
+```
+$ git-hunk list
+main.go:6-8  +3 -0    if r == nil {
+util.go:4-5  +2 -0    func extra() {}
+```
+
+A run of changes that mixes additions and deletions is one replacement and
+lists as a single row, because staging half of it would describe a file that
+never existed.
 
 Then stage the specific lines you want:
 
